@@ -1,0 +1,12 @@
+*.properties
+bin
+build.xml
+.classpath
+gen
+jni
+libs
+nbandroid
+proguard-project.txt
+.project
+.settings
+
