@@ -64,9 +64,7 @@ import java.util.HashMap;
 public class Predatoid extends Activity implements Comparator<File> {
 
     // Current directory **OR** current cue/playlist file
-    private File cur_path = null;
-    // File/dir names together with their icons displayed in the list widget
-    private ArrayList<IconifiedText> directoryEntries = new ArrayList<IconifiedText>();
+    private File cur_album_id = null;
     // File/dir names together with their icons displayed in the list widget
     private ArrayList<IconifiedText> albumEntries = new ArrayList<IconifiedText>();
     // Full paths to files in current dir/playlist/cue
@@ -222,11 +220,11 @@ public class Predatoid extends Activity implements Comparator<File> {
                     }
 
                     if (s == null) {
-                        if (prefs.last_path == null || !(cur_path = new File(prefs.last_path)).exists()) {
-                            cur_path = Environment.getExternalStorageDirectory();
+                        if (prefs.last_path == null || !(cur_album_id = new File(prefs.last_path)).exists()) {
+                            cur_album_id = Environment.getExternalStorageDirectory();
                         }
-                        if (!setAdapter(cur_path)) {
-                            log_err("cannot set default adapter!!!" + cur_path);
+                        if (!setAdapter(cur_album_id)) {
+                            log_err("cannot set default adapter!!!" + cur_album_id);
                             if (!setAdapter(new File("/"))) {
                                 errExit(R.string.strCantSetup);
                             }
@@ -512,14 +510,14 @@ public class Predatoid extends Activity implements Comparator<File> {
     View.OnClickListener onButtUp = new OnClickListener() {
 
         public void onClick(View v) {
-            if (cur_path == null) {
+            if (cur_album_id == null) {
                 return;
             }
             v.startAnimation(AnimationUtils.loadAnimation(getApplicationContext(), R.anim.blink));
-            File path = cur_path.getParentFile();
+            File path = cur_album_id.getParentFile();
             if (path != null) {
-                int k = cur_path.toString().lastIndexOf('/');
-                String last_path = cur_path.toString().substring(k + 1);
+                int k = cur_album_id.toString().lastIndexOf('/');
+                String last_path = cur_album_id.toString().substring(k + 1);
                 if (setAdapter(path)) {
                     for (k = 0; k < albumEntries.size(); k++) {
                         if (albumEntries.get(k).getTopText().compareTo(last_path) == 0) {
@@ -561,13 +559,13 @@ public class Predatoid extends Activity implements Comparator<File> {
     };
 
     private void onButtUp() {
-        if (cur_path == null) {
+        if (cur_album_id == null) {
             return;
         }
-        File path = cur_path.getParentFile();
+        File path = cur_album_id.getParentFile();
         if (path != null) {
-            int k = cur_path.toString().lastIndexOf('/');
-            String last_path = cur_path.toString().substring(k + 1);
+            int k = cur_album_id.toString().lastIndexOf('/');
+            String last_path = cur_album_id.toString().substring(k + 1);
             if (setAdapter(path)) {
                 for (k = 0; k < albumEntries.size(); k++) {
                     if (albumEntries.get(k).getTopText().compareTo(last_path) == 0) {
@@ -662,88 +660,12 @@ public class Predatoid extends Activity implements Comparator<File> {
             }
             k = k - 1;
             if ((int) k >= files.size() && a != null) {
-                log_err("cilcked item out of range! i: " + i + " k: " + k);
+                log_err("clicked item out of range! i: " + i + " k: " + k);
                 return;
             }
 
             File f = (a != null) ? f = new File(files.get((int) k)) : null;
 
-            //if(f != null && f.exists()) {
-            if (f != null && f.toString().endsWith(bmark_ext)) {
-                try {
-                    if (srv.is_running()) {
-                        saveBook();
-                    }
-                    BufferedReader reader = new BufferedReader(new FileReader(f), 8192);
-                    String line = reader.readLine();
-                    reader.close();
-                    int end = line.indexOf(":");
-                    if (end < 1) {
-                        throw new NullPointerException();
-                    }
-                    String fname = line.substring(0, end);
-                    File ff = new File(fname);
-                    if (!ff.exists()) {
-                        throw new NullPointerException();
-                    }
-                    int start = end + 1;
-                    end = line.substring(start).indexOf(":") + start;
-                    if (end < 0) {
-                        throw new NullPointerException();
-                    }
-                    int seconds = (Integer.valueOf(line.substring(start, end))).intValue();
-                    int track = 0;
-                    String cc = srv.get_cur_dir();
-
-                    if (hasAudioExt(ff)) {
-                        log_msg("BOOK: " + fname + " @" + seconds + " cc=" + cc + " cp=" + cur_path.toString());
-                        for (start = first_file_pos; start < files.size(); start++) {
-                            if (files.get(start).compareTo(fname) == 0) {
-                                break;
-                            }
-                        }
-                        track = start;
-                        if (track >= files.size()) {
-                            throw new NullPointerException();
-                        }
-                        if (cc == null || cur_path.toString().compareTo(cc) != 0 || playlist_changed) {
-                            playlist_changed = false;
-                            ArrayList<String> filly = new ArrayList<String>();
-                            for (int j = first_file_pos; j < files.size(); j++) {
-                                filly.add(files.get(j));
-                            }
-                            playContents(cur_path.toString(), filly, null, null, start - first_file_pos, seconds);
-                            return;
-                        }
-                    } else if (hasPlistExt(ff) || hasCueExt(ff)) {
-                        track = (Integer.valueOf(line.substring(end + 1))).intValue();
-                        log_msg("BOOK: " + fname + " [" + track + "] @" + seconds + " cc=" + cc + " cp=" + cur_path.toString());
-                        if (!setAdapter(ff)) {
-                            log_err("error setting adapter for " + f.toString());
-                            return;
-                        }
-                        if (cc == null || cur_path.toString().compareTo(cc) != 0 || playlist_changed) {
-                            if (hasCueExt(ff)) {
-                                playContents(ff.toString(), files, track_names, start_times, track - first_file_pos, seconds);
-                            } else if (hasPlistExt(ff)) {
-                                playContents(ff.toString(), files, null, null, track - first_file_pos, seconds);
-                            }
-                            return;
-                        }
-                    }
-                    srv.set_driver_mode(prefs.driver_mode);
-                    if (!srv.play(track - first_file_pos, seconds)) {
-                        Toast.makeText(getApplicationContext(), R.string.strSrvFail, Toast.LENGTH_SHORT).show();
-                        log_err("failed to start playing <bookmarked file>");
-                    }
-                    buttPause.setBackgroundDrawable(getResources().getDrawable(R.drawable.s_pause));
-                    return;
-                } catch (Exception e) {
-                    log_err("exception while processing bookmark file!");
-                }
-                Toast.makeText(getApplicationContext(), R.string.strBadBook, Toast.LENGTH_SHORT).show();
-                return;
-            }
             if (k < first_file_pos && f != null) {	// Directory, cue or playlist was clicked in the list
                 if (!setAdapter(f)) {
                     log_err("error setting adapter for " + f.toString());
@@ -771,7 +693,7 @@ public class Predatoid extends Activity implements Comparator<File> {
                                 log_err("error setting adapter for " + ff.toString());
                                 return;
                             }
-                            cdr = cur_path.toString();
+                            cdr = cur_album_id.toString();
                         } else {
                             curpos = prefs.last_played_file.lastIndexOf('/');
                             if (curpos < 0) {
@@ -793,7 +715,7 @@ public class Predatoid extends Activity implements Comparator<File> {
                         curpos = (int) k - first_file_pos;
                         curtime = 0;
                         cc = srv.get_cur_dir();
-                        cdr = cur_path.toString();
+                        cdr = cur_album_id.toString();
                         fileToPlay = files.get((int) k);
                         log_msg(String.format("Attempting to play file %d in %s", (int) k - first_file_pos, cdr));
                     }
@@ -827,7 +749,7 @@ public class Predatoid extends Activity implements Comparator<File> {
                     }
                     if (cc == null || cdr.compareTo(cc) != 0 || playlist_changed) {
                         playlist_changed = false;
-                        if (cur_path.isDirectory()) {
+                        if (cur_album_id.isDirectory()) {
                             ArrayList<String> filly = new ArrayList<String>();
                             for (int j = first_file_pos; j < files.size(); j++) {
                                 filly.add(files.get(j));
@@ -882,7 +804,7 @@ public class Predatoid extends Activity implements Comparator<File> {
                 }
                 return true;
             }
-            if (hasPlistExt(cur_path)) {	// edit playlist
+            if (hasPlistExt(cur_album_id)) {	// edit playlist
                 if (prefs.shuffle) {
                     Toast.makeText(getApplicationContext(), R.string.strTurnOffShuffle, Toast.LENGTH_SHORT).show();
                     return false;
@@ -1243,7 +1165,7 @@ public class Predatoid extends Activity implements Comparator<File> {
         }
         if (conn != null) {
             log_msg("unbinding service");
-            unbindService(conn);
+            getApplicationContext().unbindService(conn);
             conn = null;
         }
     }
@@ -1306,8 +1228,8 @@ public class Predatoid extends Activity implements Comparator<File> {
             editor.putBoolean("login_to_predatum", loginToPredatum);
             editor.putString("login_username", loginUserName);
             editor.putString("login_password", loginPassword);
-            if (cur_path != null) {
-                editor.putString("last_path", cur_path.toString());
+            if (cur_album_id != null) {
+                editor.putString("last_path", cur_album_id.toString());
             }
             if (plist_path != null) {
                 editor.putString("plist_path", plist_path);
@@ -1389,10 +1311,6 @@ public class Predatoid extends Activity implements Comparator<File> {
                 thisDialog = dialog;
                 thisDialog.setTitle(curRowIs + " " + (track_longpressed + 1));
                 break;
-            /*case EDIT_PLAYLIST_DLG:
-            AlertDialog submenu = (AlertDialog) dialog;
-            submenu.setTitle(directoryEntries.get(track_longpressed).getTopText().toString());
-            break;*/
             case ADD_PLAYLIST_DLG:
                 AlertDialog aDialog = (AlertDialog) dialog;
                 aDialog.setTitle(getString(R.string.strAddPlist));
@@ -1591,10 +1509,10 @@ public class Predatoid extends Activity implements Comparator<File> {
                             Toast.makeText(getApplicationContext(), R.string.strNoChg, Toast.LENGTH_SHORT).show();
                         } else {
                             File cpath;
-                            if (cur_path.toString().endsWith(plist_ext)) {
-                                cpath = cur_path;
+                            if (cur_album_id.toString().endsWith(plist_ext)) {
+                                cpath = cur_album_id;
                             } else {
-                                cpath = new File(cur_path.toString() + plist_ext);
+                                cpath = new File(cur_album_id.toString() + plist_ext);
                             }
                             if (cpath.exists()) {
                                 if (!cpath.delete()) {
@@ -1619,7 +1537,7 @@ public class Predatoid extends Activity implements Comparator<File> {
                                 log_err("Exception while saving tracklist: " + e.toString());
                             }
 
-                            setAdapterFromPlaylist(cpath);
+                            setAdapterFromPlaylist();
                             if (item_deleted) {
                                 fileList.setSelection(cur_longpressed >= files.size() ? files.size() - 1 : cur_longpressed);
                             } else {
@@ -1821,7 +1739,7 @@ public class Predatoid extends Activity implements Comparator<File> {
         if (fpath.isDirectory()) {
             return setAdapterFromMedia(fpath);
         } else if (hasPlistExt(fpath)) {
-            return setAdapterFromPlaylist(fpath);
+            return setAdapterFromPlaylist();
         } else if (hasCueExt(fpath)) {
             return setAdapterFromCue(fpath);
         }
@@ -1948,6 +1866,7 @@ public class Predatoid extends Activity implements Comparator<File> {
 
             File[] filez;
             int dirs, cues, flacs;
+            ArrayList<HashMap> sdcardMusic = new ArrayList<HashMap>();
 
             parsed_dir r = parseDir(fpath);
 
@@ -1956,12 +1875,35 @@ public class Predatoid extends Activity implements Comparator<File> {
                 return false;
             }
 
+            ContentResolver resolver = getBaseContext().getContentResolver();
+            Cursor cursor = resolver.query(MediaStore.Audio.Albums.EXTERNAL_CONTENT_URI, new String[]{"ALBUM", "ARTIST", "NUMSONGS", "_id", "MINYEAR"}, null, null, "ARTIST");
+
+            if (cursor == null) {
+                Log.e(getClass().getSimpleName(), "no albums found!");
+            } else {
+                while (cursor.moveToNext()) {
+
+                    HashMap album = new HashMap();
+
+                    album.put("album", cursor.getString(0));
+                    album.put("artist", cursor.getString(1));
+                    album.put("numsongs", cursor.getString(2));
+                    album.put("album_id", cursor.getString(3));
+                    album.put("year", cursor.getString(4));
+
+
+                    sdcardMusic.add(album);
+
+                }
+            }
+            cursor.close();
+
             filez = r.filez;
             dirs = r.dirs;
             cues = r.cues;
             flacs = r.flacs;
 
-            cur_path = fpath;
+            cur_album_id = fpath;
             first_file_pos = dirs + cues;
 
             files.clear();
@@ -1971,101 +1913,24 @@ public class Predatoid extends Activity implements Comparator<File> {
             if (start_times.size() > 0) {
                 start_times.clear();
             }
-            directoryEntries.clear();
+            albumEntries.clear();
 
             Drawable dir_icon = getResources().getDrawable(R.drawable.folder);
             Drawable aud_icon = getResources().getDrawable(R.drawable.audio1);
             Drawable cue_icon = getResources().getDrawable(R.drawable.plist);
 
-            int plen = cur_path.toString().length();
-            if (cur_path.toString().compareTo("/") != 0) {
-                plen++;
-            }
-            directoryEntries.add(new IconifiedText("...", "", dir_icon));
-            for (int i = 0; i < dirs + cues + flacs; i++) {
-                String s = filez[i].toString().substring(plen);
-                if (i < dirs) {
-                    directoryEntries.add(new IconifiedText("", s, dir_icon));
-                } else if (i < dirs + cues) {
-                    directoryEntries.add(new IconifiedText("", s, cue_icon));
-                } else {
-                    directoryEntries.add(new IconifiedText("", s, aud_icon));
-                }
-                files.add(filez[i].toString());
+            for (int i = 0; i < sdcardMusic.size(); i++){
+
+                albumEntries.add(new IconifiedText(
+                        sdcardMusic.get(i).get("album").toString() + " " + sdcardMusic.get(i).get("year") + " (" + sdcardMusic.get(i).get("numsongs").toString() + " songs)",
+                        sdcardMusic.get(i).get("artist").toString() ,
+                        dir_icon));
             }
 
             IconifiedTextListAdapter ita = new IconifiedTextListAdapter(this);
-            ita.setListItems(directoryEntries);
+            ita.setListItems(albumEntries);
             fileList.setAdapter(ita);
             return true;
-
-
-//            File[] filez;
-//            int dirs, cues, flacs;
-//            ArrayList<HashMap> sdcardMusic = new ArrayList<HashMap>();
-//
-//            parsed_dir r = parseDir(fpath);
-//
-//            if (r == null) {
-//                Toast.makeText(getApplicationContext(), R.string.strNoFiles, Toast.LENGTH_SHORT).show();
-//                return false;
-//            }
-//
-//            ContentResolver resolver = getBaseContext().getContentResolver();
-//            Cursor cursor = resolver.query(MediaStore.Audio.Albums.EXTERNAL_CONTENT_URI, new String[]{"ALBUM", "ARTIST", "NUMSONGS", "_id"}, null, null, "ARTIST");
-//
-//            if (cursor == null) {
-//                Log.e(getClass().getSimpleName(), "no albums found!");
-//            } else {
-//                while (cursor.moveToNext()) {
-//
-//                    HashMap album = new HashMap();
-//
-//                    album.put("album", cursor.getString(0));
-//                    album.put("artist", cursor.getString(1));
-//                    album.put("numsongs", cursor.getString(2));
-//                    album.put("album_id", cursor.getString(3));
-//
-//
-//                    sdcardMusic.add(album);
-//
-//                }
-//            }
-//            cursor.close();
-//
-//            filez = r.filez;
-//            dirs = r.dirs;
-//            cues = r.cues;
-//            flacs = r.flacs;
-//
-//            cur_path = fpath;
-//            first_file_pos = dirs + cues;
-//
-//            files.clear();
-//            if (track_names.size() > 0) {
-//                track_names.clear();
-//            }
-//            if (start_times.size() > 0) {
-//                start_times.clear();
-//            }
-//            albumEntries.clear();
-//
-//            Drawable dir_icon = getResources().getDrawable(R.drawable.folder);
-//            Drawable aud_icon = getResources().getDrawable(R.drawable.audio1);
-//            Drawable cue_icon = getResources().getDrawable(R.drawable.plist);
-//
-//            for (int i = 0; i < sdcardMusic.size(); i++){
-//
-//                albumEntries.add(new IconifiedText(
-//                        sdcardMusic.get(i).get("album").toString() + " (" + sdcardMusic.get(i).get("numsongs").toString() + ")",
-//                        sdcardMusic.get(i).get("artist").toString() ,
-//                        dir_icon));
-//            }
-//
-//            IconifiedTextListAdapter ita = new IconifiedTextListAdapter(this);
-//            ita.setListItems(albumEntries);
-//            fileList.setAdapter(ita);
-//            return true;
 
         } catch (Exception e) {
             log_err("Exception in setAdapterFromMedia(): " + e.toString());
@@ -2092,8 +1957,8 @@ public class Predatoid extends Activity implements Comparator<File> {
 
             String line = null;
             String path = null;
-            if (cur_path != null) {
-                path = cur_path.toString();
+            if (cur_album_id != null) {
+                path = cur_album_id.toString();
                 if (!path.endsWith("/")) {
                     path += "/";
                 }
@@ -2156,42 +2021,42 @@ public class Predatoid extends Activity implements Comparator<File> {
         return playContents(fpath.toString(), filez, null, null, 0, 0);
     }
 
-    private boolean setAdapterFromPlaylist(File fpath) {
+    private boolean setAdapterFromPlaylist() {
         try {
 
-            ArrayList<String> filez = parsePlaylist(fpath);
-            if (filez == null) {
-                return false;
-            }
-
-            cur_path = fpath;
-            first_file_pos = 0;
-
-            files.clear();
-            if (track_names.size() > 0) {
-                track_names.clear();
-            }
-            if (start_times.size() > 0) {
-                start_times.clear();
-            }
-            albumEntries.clear();
-            Drawable dir_icon = getResources().getDrawable(R.drawable.folder);
-            Drawable aud_icon = getResources().getDrawable(R.drawable.audio1);
-            albumEntries.add(new IconifiedText("...", "", dir_icon));
-            for (int i = 0; i < filez.size(); i++) {
-                String s = filez.get(i);
-                files.add(s);
-                int k = s.lastIndexOf('/');
-                if (k >= 0) {
-                    s = s.substring(k + 1);
-                }
-                albumEntries.add(new IconifiedText(s, "", aud_icon));
-
-            }
-
-            IconifiedTextListAdapter ita = new IconifiedTextListAdapter(this);
-            ita.setListItems(albumEntries);
-            fileList.setAdapter(ita);
+//            ArrayList<String> filez = parsePlaylist();
+//            if (filez == null) {
+//                return false;
+//            }
+//
+//            cur_album_id = fpath;
+//            first_file_pos = 0;
+//
+//            files.clear();
+//            if (track_names.size() > 0) {
+//                track_names.clear();
+//            }
+//            if (start_times.size() > 0) {
+//                start_times.clear();
+//            }
+//            albumEntries.clear();
+//            Drawable dir_icon = getResources().getDrawable(R.drawable.folder);
+//            Drawable aud_icon = getResources().getDrawable(R.drawable.audio1);
+//            albumEntries.add(new IconifiedText("...", "", dir_icon));
+//            for (int i = 0; i < filez.size(); i++) {
+//                String s = filez.get(i);
+//                files.add(s);
+//                int k = s.lastIndexOf('/');
+//                if (k >= 0) {
+//                    s = s.substring(k + 1);
+//                }
+//                albumEntries.add(new IconifiedText(s, "", aud_icon));
+//
+//            }
+//
+//            IconifiedTextListAdapter ita = new IconifiedTextListAdapter(this);
+//            ita.setListItems(albumEntries);
+//            fileList.setAdapter(ita);
 
             return true;
 
@@ -2359,7 +2224,7 @@ public class Predatoid extends Activity implements Comparator<File> {
             namez = r.namez;
             timez = r.timez;
 
-            cur_path = fpath;
+            cur_album_id = fpath;
             first_file_pos = 0;
 
             files.clear();
