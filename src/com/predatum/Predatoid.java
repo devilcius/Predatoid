@@ -67,6 +67,8 @@ public class Predatoid extends Activity implements Comparator<File> {
     private int cur_album_id = 0;
     // File/dir names together with their icons displayed in the list widget
     private ArrayList<IconifiedText> albumEntries = new ArrayList<IconifiedText>();
+    // List of tracks
+    private ArrayList<IconifiedText> trackEntries = new ArrayList<IconifiedText>();
     // Full paths to files in current dir/playlist/cue
     private ArrayList<String> files = new ArrayList<String>();
     // Track names in cue file
@@ -187,7 +189,8 @@ public class Predatoid extends Activity implements Comparator<File> {
                                 playPath(f);
                                 return;
                             }
-                        }                throw new NullPointerException();
+                        }
+                        throw new NullPointerException();
                     }
                     String s = srv.get_cur_dir();
                     if (s != null) {
@@ -329,18 +332,6 @@ public class Predatoid extends Activity implements Comparator<File> {
             pause_on_start = false;
         }
     }
-    /*    	class RestoreButton implements Runnable {
-    private int init_res;
-    private Button button;
-    RestoreButton(Button b, int res) { button = b; init_res = res; }
-    public void run() {
-    button.setBackgroundDrawable(getResources().getDrawable(init_res));
-    }
-    }
-    // Before its replacement with v.startAnimation(...) it was used as:
-    //	 v.setBackgroundDrawable(getResources().getDrawable(R.drawable.green_go_prev_32));
-    //	 v.scheduleDrawable(v.getBackground(), new RestoreButton((Button) v,R.drawable.go_prev_32), SystemClock.uptimeMillis()+delay);
-     */
     private boolean samsung = false;
     View.OnClickListener onButtPause = new OnClickListener() {
 
@@ -1629,17 +1620,6 @@ public class Predatoid extends Activity implements Comparator<File> {
     ////////////////////////////////////////////////////////////////////
     ////////////////// Directory/playlist/cue handlers /////////////////
     ////////////////////////////////////////////////////////////////////
-
-    /*    	public final class Tchk implements Comparator<File>  {
-    public static final String plist_ext = ".playlist";
-    public int compare(File f1, File f2) {
-    int type1 = filetype(f1), type2 = filetype(f2);
-    if(type1 != type2) return type1 - type2;
-    return f1.getName().compareTo(f2.getName());
-    }
-    }
-    public final Tchk TC = new Tchk();
-     */
     public static final String plist_ext = ".playlist";
     public static final String bmark_ext = ".bmark";
     // Mp3support
@@ -1732,7 +1712,7 @@ public class Predatoid extends Activity implements Comparator<File> {
     private boolean setAdapter() {
         if (cur_album_id == 0) {
             return setAdapterFromMedia();
-        } else  {
+        } else {
             return setAdapterFromPlaylist();
         }
     }
@@ -1881,22 +1861,22 @@ public class Predatoid extends Activity implements Comparator<File> {
             }
             cursor.close();
 
-            if (track_names.size() > 0) {
-                track_names.clear();
-            }
-            if (start_times.size() > 0) {
-                start_times.clear();
-            }
+//            if (track_names.size() > 0) {
+//                track_names.clear();
+//            }
+//            if (start_times.size() > 0) {
+//                start_times.clear();
+//            }
             albumEntries.clear();
 
             Drawable dir_icon = getResources().getDrawable(R.drawable.folder);
 
-            for (int i = 0; i < sdcardMusic.size(); i++){
+            for (int i = 0; i < sdcardMusic.size(); i++) {
 
                 albumEntries.add(new IconifiedText(
                         sdcardMusic.get(i).get("album").toString() + " " + sdcardMusic.get(i).get("year") + " (" + sdcardMusic.get(i).get("numsongs").toString() + " songs)",
-                        sdcardMusic.get(i).get("artist").toString() ,
-                        dir_icon));
+                        sdcardMusic.get(i).get("artist").toString(),
+                        dir_icon, Integer.parseInt(sdcardMusic.get(i).get("album_id").toString())));
             }
 
             IconifiedTextListAdapter ita = new IconifiedTextListAdapter(this);
@@ -1996,40 +1976,50 @@ public class Predatoid extends Activity implements Comparator<File> {
     private boolean setAdapterFromPlaylist() {
         try {
 
-//            ArrayList<String> filez = parsePlaylist();
-//            if (filez == null) {
-//                return false;
-//            }
-//
-//            cur_album_id = fpath;
-//            first_file_pos = 0;
-//
-//            files.clear();
-//            if (track_names.size() > 0) {
-//                track_names.clear();
-//            }
-//            if (start_times.size() > 0) {
-//                start_times.clear();
-//            }
-//            albumEntries.clear();
-//            Drawable dir_icon = getResources().getDrawable(R.drawable.folder);
-//            Drawable aud_icon = getResources().getDrawable(R.drawable.audio1);
-//            albumEntries.add(new IconifiedText("...", "", dir_icon));
-//            for (int i = 0; i < filez.size(); i++) {
-//                String s = filez.get(i);
-//                files.add(s);
-//                int k = s.lastIndexOf('/');
-//                if (k >= 0) {
-//                    s = s.substring(k + 1);
-//                }
-//                albumEntries.add(new IconifiedText(s, "", aud_icon));
-//
-//            }
-//
-//            IconifiedTextListAdapter ita = new IconifiedTextListAdapter(this);
-//            ita.setListItems(albumEntries);
-//            fileList.setAdapter(ita);
+            ArrayList<HashMap> trackList = new ArrayList<HashMap>();
+            ContentResolver resolver = getBaseContext().getContentResolver();
+            Cursor cursor = resolver.query(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, new String[]{"ALBUM", "ARTIST", "YEAR", "TITLE", "TRACK", "_display_name", "_data", "_size", "duration"}, "album_id=" + cur_album_id, null, "TRACK");
+            int trackNum = 1;
 
+            while (cursor.moveToNext()) {
+
+                HashMap song = new HashMap();
+
+                song.put("album", cursor.getString(0));
+                song.put("artist", cursor.getString(1));
+                song.put("year", cursor.getInt(2));
+                song.put("title", cursor.getString(3));
+                song.put("track", trackNum);
+                song.put("filename", cursor.getString(5));
+                song.put("file_path", cursor.getString(6));
+//            song.put("genre", smdr.mGenre);
+                song.put("file_size", cursor.getString(7));
+                song.put("duration", cursor.getString(8));
+
+                trackList.add(song);
+
+                trackNum++;
+
+
+            }
+
+            cursor.close();
+            trackEntries.clear();
+
+            Drawable songIcon = getResources().getDrawable(R.drawable.audio);
+
+            for (int i = 0; i < trackList.size(); i++) {
+                trackEntries.add(new IconifiedText(
+                        trackList.get(i).get("track").toString() + ". " +
+                        trackList.get(i).get("year") + " (" +
+                        trackList.get(i).get("numsongs").toString() + " songs)",
+                        trackList.get(i).get("artist").toString(),
+                        songIcon, cur_album_id));
+            }
+
+            IconifiedTextListAdapter ita = new IconifiedTextListAdapter(this);
+            ita.setListItems(trackEntries);
+            fileList.setAdapter(ita);
             return true;
 
         } catch (Exception e) {
@@ -2209,12 +2199,12 @@ public class Predatoid extends Activity implements Comparator<File> {
             albumEntries.clear();
             Drawable dir_icon = getResources().getDrawable(R.drawable.folder);
             Drawable aud_icon = getResources().getDrawable(R.drawable.audio1);
-            albumEntries.add(new IconifiedText("...", "", dir_icon));
+            albumEntries.add(new IconifiedText("...", "", dir_icon, cur_album_id));
             for (int i = 0; i < filez.size(); i++) {
                 files.add(filez.get(i));
                 track_names.add(namez.get(i));
                 start_times.add(timez.get(i));
-                albumEntries.add(new IconifiedText(namez.get(i), "", aud_icon));
+                albumEntries.add(new IconifiedText(namez.get(i), "", aud_icon, cur_album_id));
             }
 
             IconifiedTextListAdapter ita = new IconifiedTextListAdapter(this);
@@ -2242,35 +2232,5 @@ public class Predatoid extends Activity implements Comparator<File> {
         return (bytes[0] == -1 && bytes[1] == -2)
                 || (bytes[0] == -2 && bytes[1] == -1);
     }
-    ///////////////////////////////////////////////////////
-    ////////////////// Media button events ////////////////
-    /*
-    public final class MediaButtonReceiver extends BroadcastReceiver {
-    @Override
-    public void onReceive(Context context, Intent intent) {
-    Log.i("PredatoidSrv.MediaButtonReceiver", "button event: " + intent.getStringExtra(Intent.EXTRA_KEY_EVENT));
-    KeyEvent event = (KeyEvent)  intent.getParcelableExtra(Intent.EXTRA_KEY_EVENT);
-    if(event == null || event.getAction() != KeyEvent.ACTION_DOWN) return;
-    try {
-    switch(event.getKeyCode()) {
-    case KeyEvent.KEYCODE_MEDIA_STOP:
-    if(srv!= null) srv.pause();
-    break;
-    case KeyEvent.KEYCODE_HEADSETHOOK:
-    case KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE:
-    if(srv!= null) {
-    if(srv.is_running() && !srv.is_paused()) srv.pause();
-    else srv.resume();
-    }
-    break;
-    case KeyEvent.KEYCODE_MEDIA_NEXT:
-    if(srv != null) srv.play_next();
-    break;
-    case KeyEvent.KEYCODE_MEDIA_PREVIOUS:
-    if(srv != null) srv.play_prev();
-    break;
-    }
-    } catch(Exception e) {}
-    }
-    } */
+
 }
