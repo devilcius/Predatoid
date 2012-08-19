@@ -60,7 +60,9 @@ import android.widget.SeekBar.OnSeekBarChangeListener;
 
 import com.predatum.iconifiedlist.IconifiedText;
 import com.predatum.iconifiedlist.IconifiedTextListAdapter;
+
 import java.util.HashMap;
+import java.util.concurrent.TimeUnit;
 
 public class Predatoid extends Activity implements Comparator<File> {
 
@@ -640,7 +642,7 @@ public class Predatoid extends Activity implements Comparator<File> {
         public void onItemClick(AdapterView<?> a, View v, int i, long k) {
 
 
-            IconifiedText iconifiedText = (IconifiedText)a.getAdapter().getItem(i);
+            IconifiedText iconifiedText = (IconifiedText) a.getAdapter().getItem(i);
 
             cur_album_id = iconifiedText.getAlbumID();
             setAdapter();
@@ -1999,7 +2001,8 @@ public class Predatoid extends Activity implements Comparator<File> {
                 song.put("track", trackNum);
                 song.put("filename", cursor.getString(5));
                 song.put("file_path", cursor.getString(6));
-//            song.put("genre", smdr.mGenre);
+                SongExtraInfo songExtraInfo = new SongExtraInfo();
+                song.put("genre", songExtraInfo.getSongGenre(new File(cursor.getString(6))));
                 song.put("file_size", cursor.getString(7));
                 song.put("duration", cursor.getString(8));
 
@@ -2017,10 +2020,11 @@ public class Predatoid extends Activity implements Comparator<File> {
 
             for (int i = 0; i < trackList.size(); i++) {
                 trackEntries.add(new IconifiedText(
-                        trackList.get(i).get("track").toString() + ". " +
-                        trackList.get(i).get("artist") + " - " +
-                        trackList.get(i).get("title").toString(),
-                        "",
+                        trackList.get(i).get("track").toString() + ". "
+                        + trackList.get(i).get("artist") + " - "
+                        + trackList.get(i).get("title"),
+                        songDurationFormat(Long.parseLong(trackList.get(i).get("duration").toString()))
+                        + " :: " + trackList.get(i).get("genre"),
                         songIcon, cur_album_id));
             }
 
@@ -2035,8 +2039,16 @@ public class Predatoid extends Activity implements Comparator<File> {
         }
     }
 
+    private String songDurationFormat(Long songDuration) {
+        return String.format("%d:%02d ",
+                TimeUnit.MILLISECONDS.toMinutes(songDuration),
+                TimeUnit.MILLISECONDS.toSeconds(songDuration)
+                - TimeUnit.MINUTES.toSeconds(TimeUnit.MILLISECONDS.toMinutes(songDuration)));
+
+    }
     ////////////////////////////////////////
     ////////////// CUE files ///////////////
+
     private class parsed_cue {
 
         ArrayList<String> filez;
@@ -2239,5 +2251,4 @@ public class Predatoid extends Activity implements Comparator<File> {
         return (bytes[0] == -1 && bytes[1] == -2)
                 || (bytes[0] == -2 && bytes[1] == -1);
     }
-
 }

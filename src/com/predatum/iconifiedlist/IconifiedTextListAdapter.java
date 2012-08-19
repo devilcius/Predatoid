@@ -4,7 +4,9 @@ import java.util.ArrayList;
 import java.util.List;
 import com.predatum.R;
 import android.content.Context;
+import android.graphics.Typeface;
 import android.util.Log;
+import android.util.TypedValue;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -65,6 +67,8 @@ public class IconifiedTextListAdapter extends BaseAdapter {
             upperTextView.setText(mItems.get(position).getTopText());
             bottomTextView = (TextView)newView.findViewById(R.id.bottomtext);
             bottomTextView.setText(mItems.get(position).getBottomText());
+            bottomTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 10);
+            bottomTextView.setTypeface(null, Typeface.ITALIC);
             imgView = (ImageView)newView.findViewById(R.id.icon);
             imgView.setImageDrawable(mItems.get(position).getIcon());
             
