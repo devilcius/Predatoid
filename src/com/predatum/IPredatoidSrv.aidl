@@ -4,7 +4,7 @@ import com.predatum.IPredatoidSrvCallback;
 
 interface IPredatoidSrv {
 	boolean init_playlist(in String path, int nitems);
-	boolean add_to_playlist(in String track_source, in String track_name, int start_time, int pos);
+	boolean addToPlaylist(in String track_source, in String track_name, int start_time, int pos);
 	boolean play(int n, int start);
 	boolean seek_to(int p);
 	boolean play_next();

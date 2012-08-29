@@ -16,7 +16,6 @@ import android.content.IntentFilter;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.net.Uri;
-import android.os.Build;
 import android.os.IBinder;
 import android.os.PowerManager;
 import android.os.Process;
@@ -294,7 +293,7 @@ public class PredatoidSrv extends Service {
         private int cur_mode;		// MODE_NONE for mp3, or one of driver_mode
         private int driver_mode;	// driver mode in client preferences
 
-        public boolean init_playlist(String path, int items) {
+        public boolean initPlaylist(String path, int items) {
             if (items <= 0) {
                 return false;
             }
@@ -319,13 +318,13 @@ public class PredatoidSrv extends Service {
                 names = new String[items];
                 times = new int[items];
             } catch (Exception e) {
-                log_err("exception in init_playlist(): " + e.toString());
+                log_err("exception in initPlaylist(): " + e.toString());
                 return false;
             }
             return true;
         }
 
-        public boolean add_to_playlist(String track_source, String track_name, int start_time, int pos) {
+        public boolean addToPlaylist(String track_source, String track_name, int start_time, int pos) {
             if (pos >= files.length) {
                 return false;
             }
@@ -785,11 +784,11 @@ public class PredatoidSrv extends Service {
 
         public boolean init_playlist(String path, int nitems) {
             plist.stop(); //	plist = null; 		plist = new playlist();
-            return plist.init_playlist(path, nitems);
+            return plist.initPlaylist(path, nitems);
         }
 
-        public boolean add_to_playlist(String src, String name, int start_time, int pos) {
-            return plist.add_to_playlist(src, name, start_time, pos);
+        public boolean addToPlaylist(String src, String name, int start_time, int pos) {
+            return plist.addToPlaylist(src, name, start_time, pos);
         }
 
         public boolean play(int n, int start) {

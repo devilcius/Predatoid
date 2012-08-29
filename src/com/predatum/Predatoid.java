@@ -4,7 +4,6 @@ import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -63,17 +62,21 @@ import com.predatum.iconifiedlist.IconifiedTextListAdapter;
 
 import java.util.HashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class Predatoid extends Activity implements Comparator<File> {
 
     // Current directory **OR** current cue/playlist file
-    private int cur_album_id = 0;
+    private int curAlbumID = 0;
     // File/dir names together with their icons displayed in the list widget
     private ArrayList<IconifiedText> albumEntries = new ArrayList<IconifiedText>();
     // List of tracks
     private ArrayList<IconifiedText> trackEntries = new ArrayList<IconifiedText>();
     // Full paths to files in current dir/playlist/cue
     private ArrayList<String> files = new ArrayList<String>();
+    // Full paths to files in current playlist
+    private ArrayList<String> filesToPlay = new ArrayList<String>();
     // Track names in cue file
     private ArrayList<String> track_names = new ArrayList<String>();
     // Track start times (seconds) in cue file
@@ -84,6 +87,8 @@ public class Predatoid extends Activity implements Comparator<File> {
     private boolean pause_on_start = false;
     // Changed to true in playlists/settings dialogs
     private boolean playlist_changed = false;
+    // A song is list is displayed and ready to be played
+    private boolean readyToPlay = false;
 
     private void log_msg(String msg) {
         Log.i(getClass().getSimpleName(), msg);
@@ -498,7 +503,7 @@ public class Predatoid extends Activity implements Comparator<File> {
     View.OnClickListener onButtUp = new OnClickListener() {
 
         public void onClick(View v) {
-            if (cur_album_id == 0) {
+            if (curAlbumID == 0) {
                 return;
             }
             v.startAnimation(AnimationUtils.loadAnimation(getApplicationContext(), R.anim.blink));
@@ -547,7 +552,7 @@ public class Predatoid extends Activity implements Comparator<File> {
     };
 
     private void onButtUp() {
-        if (cur_album_id == 0) {
+        if (curAlbumID == 0) {
             return;
         }
 //        File path = cur_album_id.getParentFile();
@@ -568,23 +573,23 @@ public class Predatoid extends Activity implements Comparator<File> {
     }
 
     // Load the server playlist with contents of arrays, and play starting from the k-th item @ time start.
-    private boolean playContents(String fpath, ArrayList<String> filez, ArrayList<String> namez,
-            ArrayList<Integer> timez, int k, int start) {
+    private boolean playContents(String fpath, ArrayList<String> audioFiles, ArrayList<String> songNames,
+            ArrayList<Integer> startTimes, int trackNum, int startPos) {
         try {
-            if (!srv.init_playlist(fpath, filez.size())) {
+            if (!srv.init_playlist(fpath, audioFiles.size())) {
                 log_err("failed to initialize new playlist on server");
                 Toast.makeText(getApplicationContext(), R.string.strSrvFail, Toast.LENGTH_SHORT).show();
                 return false;
             }
-            for (int i = 0; i < filez.size(); i++) {
-                if (!srv.add_to_playlist(filez.get(i), (namez != null) ? namez.get(i) : null, (namez != null) ? timez.get(i) : 0, i)) {
+            for (int i = 0; i < audioFiles.size(); i++) {
+                if (!srv.addToPlaylist(audioFiles.get(i), (songNames != null) ? songNames.get(i) : null, (songNames != null) ? startTimes.get(i) : 0, i)) {
                     log_err("failed to add a file to server playlist");
                     Toast.makeText(getApplicationContext(), R.string.strSrvFail, Toast.LENGTH_SHORT).show();
                     return false;
                 }
             }
             srv.set_driver_mode(prefs.driver_mode);
-            if (!srv.play(k, start)) {
+            if (!srv.play(trackNum, startPos)) {
                 Toast.makeText(getApplicationContext(), R.string.strSrvFail, Toast.LENGTH_SHORT).show();
                 log_err("failed to start playing <contents>");
                 return false;
@@ -644,9 +649,12 @@ public class Predatoid extends Activity implements Comparator<File> {
 
             IconifiedText iconifiedText = (IconifiedText) a.getAdapter().getItem(i);
 
-            cur_album_id = iconifiedText.getAlbumID();
+            curAlbumID = iconifiedText.getAlbumID();
             setAdapter();
 
+            if (readyToPlay) {
+                playContents(startfile, filesToPlay, null, null, 0, 0);
+            }
 //            pause_on_start = false;
 //            if (i == 0 && a != null) {
 //                onButtUp();
@@ -1222,7 +1230,7 @@ public class Predatoid extends Activity implements Comparator<File> {
             editor.putBoolean("login_to_predatum", loginToPredatum);
             editor.putString("login_username", loginUserName);
             editor.putString("login_password", loginPassword);
-            if (cur_album_id != 0) {
+            if (curAlbumID != 0) {
 //                editor.putString("last_path", cur_album_id.toString());
             }
             if (plist_path != null) {
@@ -1531,7 +1539,7 @@ public class Predatoid extends Activity implements Comparator<File> {
                                 log_err("Exception while saving tracklist: " + e.toString());
                             }
 
-                            setAdapterFromPlaylist();
+                            setAdapterFromAlbum();
                             if (item_deleted) {
                                 fileList.setSelection(cur_longpressed >= files.size() ? files.size() - 1 : cur_longpressed);
                             } else {
@@ -1717,12 +1725,12 @@ public class Predatoid extends Activity implements Comparator<File> {
         return f1.getName().compareTo(f2.getName());
     }
 
-    // display album list or track list.
+    // displays adapter list.
     private boolean setAdapter() {
-        if (cur_album_id == 0) {
+        if (curAlbumID == 0) {
             return setAdapterFromMedia();
         } else {
-            return setAdapterFromPlaylist();
+            return setAdapterFromAlbum();
         }
     }
 
@@ -1845,7 +1853,7 @@ public class Predatoid extends Activity implements Comparator<File> {
         try {
 
             ArrayList<HashMap> sdcardMusic = new ArrayList<HashMap>();
-
+            readyToPlay = false;
             ContentResolver resolver = getBaseContext().getContentResolver();
             Cursor cursor = resolver.query(MediaStore.Audio.Albums.EXTERNAL_CONTENT_URI, new String[]{"ALBUM", "ARTIST", "NUMSONGS", "_id", "MINYEAR"}, null, null, "ARTIST");
 
@@ -1918,7 +1926,7 @@ public class Predatoid extends Activity implements Comparator<File> {
 
             String line = null;
             String path = null;
-            if (cur_album_id != 0) {
+            if (curAlbumID != 0) {
 //                path = cur_album_id.toString();
 //                if (!path.endsWith("/")) {
 //                    path += "/";
@@ -1982,14 +1990,14 @@ public class Predatoid extends Activity implements Comparator<File> {
         return playContents(fpath.toString(), filez, null, null, 0, 0);
     }
 
-    private boolean setAdapterFromPlaylist() {
+    private boolean setAdapterFromAlbum() {
         try {
 
             ArrayList<HashMap> trackList = new ArrayList<HashMap>();
             ContentResolver resolver = getBaseContext().getContentResolver();
-            Cursor cursor = resolver.query(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, new String[]{"ALBUM", "ARTIST", "YEAR", "TITLE", "TRACK", "_display_name", "_data", "_size", "duration"}, "album_id=" + cur_album_id, null, "TRACK");
+            Cursor cursor = resolver.query(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, new String[]{"ALBUM", "ARTIST", "YEAR", "TITLE", "TRACK", "_display_name", "_data", "_size", "duration"}, "album_id=" + curAlbumID, null, "TRACK");
             int trackNum = 1;
-
+            filesToPlay.clear();
             while (cursor.moveToNext()) {
 
                 HashMap song = new HashMap();
@@ -2008,6 +2016,9 @@ public class Predatoid extends Activity implements Comparator<File> {
 
                 trackList.add(song);
 
+                //fills list of files path of current playlist
+                filesToPlay.add(cursor.getString(6));
+
                 trackNum++;
 
 
@@ -2025,16 +2036,17 @@ public class Predatoid extends Activity implements Comparator<File> {
                         + trackList.get(i).get("title"),
                         songDurationFormat(Long.parseLong(trackList.get(i).get("duration").toString()))
                         + " :: " + trackList.get(i).get("genre"),
-                        songIcon, cur_album_id));
+                        songIcon, curAlbumID));
             }
 
             IconifiedTextListAdapter ita = new IconifiedTextListAdapter(this);
             ita.setListItems(trackEntries);
             fileList.setAdapter(ita);
+            readyToPlay = true;
             return true;
 
         } catch (Exception e) {
-            log_err("exception in setAdapterFromPlaylist(): " + e.toString());
+            log_err("exception in setAdapterFromAlbum(): " + e.toString());
             return false;
         }
     }
@@ -2218,12 +2230,12 @@ public class Predatoid extends Activity implements Comparator<File> {
             albumEntries.clear();
             Drawable dir_icon = getResources().getDrawable(R.drawable.folder);
             Drawable aud_icon = getResources().getDrawable(R.drawable.audio1);
-            albumEntries.add(new IconifiedText("...", "", dir_icon, cur_album_id));
+            albumEntries.add(new IconifiedText("...", "", dir_icon, curAlbumID));
             for (int i = 0; i < filez.size(); i++) {
                 files.add(filez.get(i));
                 track_names.add(namez.get(i));
                 start_times.add(timez.get(i));
-                albumEntries.add(new IconifiedText(namez.get(i), "", aud_icon, cur_album_id));
+                albumEntries.add(new IconifiedText(namez.get(i), "", aud_icon, curAlbumID));
             }
 
             IconifiedTextListAdapter ita = new IconifiedTextListAdapter(this);
