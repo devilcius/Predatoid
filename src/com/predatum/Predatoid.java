@@ -1093,9 +1093,6 @@ public class Predatoid extends Activity implements Comparator<File> {
 
         super.onCreate(savedInstanceState);
 
-        Intent intent = new Intent().setAction(ScanService.ACTION_SCAN_DIR).setData(Uri.fromFile(new File("/sdcard")));
-        startService(intent);
-
 
         Intent ii = getIntent();
         prefs = new Prefs();
@@ -2046,7 +2043,7 @@ public class Predatoid extends Activity implements Comparator<File> {
             return true;
 
         } catch (Exception e) {
-            log_err("exception in setAdapterFromAlbum(): " + e.toString());
+            Log.e(this.getClass().getName(),"exception in setAdapterFromAlbum(): " + e.toString());
             return false;
         }
     }

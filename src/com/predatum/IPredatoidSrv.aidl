@@ -30,6 +30,6 @@ interface IPredatoidSrv {
 	void	set_headset_mode(int mode);
 	void registerCallback(IPredatoidSrvCallback cb);
     void unregisterCallback(IPredatoidSrvCallback cb);
-    int []	get_cue_from_flac(in String file);
+    //int []	get_cue_from_flac(in String file);
     void	launch(in String path);
 }
