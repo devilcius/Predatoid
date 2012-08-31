@@ -67,7 +67,7 @@ import java.util.logging.Logger;
 
 public class Predatoid extends Activity implements Comparator<File> {
 
-    // Current directory **OR** current cue/playlist file
+    // Current album id
     private int curAlbumID = 0;
     // File/dir names together with their icons displayed in the list widget
     private ArrayList<IconifiedText> albumEntries = new ArrayList<IconifiedText>();
@@ -653,129 +653,19 @@ public class Predatoid extends Activity implements Comparator<File> {
             setAdapter();
 
             if (readyToPlay) {
-                playContents(startfile, filesToPlay, null, null, 0, 0);
+                playContents(startfile, filesToPlay, null, null, i, i);
             }
-//            pause_on_start = false;
-//            if (i == 0 && a != null) {
-//                onButtUp();
-//                return;
-//            }
-//            k = k - 1;
-//            if ((int) k >= files.size() && a != null) {
-//                log_err("clicked item out of range! i: " + i + " k: " + k);
-//                return;
-//            }
-//
-//            File f = (a != null) ? f = new File(files.get((int) k)) : null;
-//
-//            if (k < first_file_pos && f != null) {	// Directory, cue or playlist was clicked in the list
-//                if (!setAdapter()) {
-//                    log_err("error setting adapter for " + f.toString());
-//                }
-//            } else {
-//                try {				// Regular file, or cue track. first_file_pos is always 0 for playlists and cues.
-//                    if (srv.is_running() && f != null) {
-//                        saveBook();
-//                    }
-//                    String cc;
-//                    String cdr;
-//                    String fileToPlay = null;
-//                    int curpos;
-//                    int curtime;
-//                    if (f == null) {
-//                        if (prefs.last_played_file == null) {
-//                            return;
-//                        }
-//                        File ff = new File(prefs.last_played_file);
-//                        if (!ff.exists()) {
-//                            return;
-//                        }
-//                        if (hasPlistExt(ff) || hasCueExt(ff)) {
-//                            if (!setAdapter()) {
-//                                log_err("error setting adapter for " + ff.toString());
-//                                return;
-//                            }
-////                            cdr = cur_album_id.toString();
-//                        } else {
-//                            curpos = prefs.last_played_file.lastIndexOf('/');
-//                            if (curpos < 0) {
-//                                return;
-//                            }
-//                            cdr = prefs.last_played_file.substring(0, curpos);
-//                            if (!setAdapter()) {
-//                                log_err("error setting adapter for " + ff.toString());
-//                                return;
-//                            }
-//                        }
-//                        fileToPlay = null;
-//                        curpos = prefs.last_played_pos;
-//                        curtime = prefs.last_played_time;
-//
-//                        cc = null;
-////                        log_msg(String.format("Resuming from file %s in %s, idx=%d time=%d", prefs.last_played_file, cdr, curpos, curtime));
-//                    } else {
-//                        curpos = (int) k - first_file_pos;
-//                        curtime = 0;
-//                        cc = srv.get_cur_dir();
-////                        cdr = cur_album_id.toString();
-//                        fileToPlay = files.get((int) k);
-////                        log_msg(String.format("Attempting to play file %d in %s", (int) k - first_file_pos, cdr));
-//                    }
-//
-//                    if (fileToPlay != null && (fileToPlay.endsWith(".flac") || fileToPlay.endsWith(".FLAC"))) {
-//                        File q = new File(fileToPlay);
-//                        String s = fileToPlay.substring(0, fileToPlay.lastIndexOf('.')) + ".cue";
-//                        File qz = new File(s);
-//                        if (q.exists() && !q.isDirectory() && !qz.exists()) {
-//                            int[] qq = PredatoidSrv.extractFlacCUE(fileToPlay);  //srv.get_cue_from_flac(fileToPlay);
-//                            if (qq != null) {
-//                                log_msg("Saving embedded CUE from " + fileToPlay + " to " + s);
-//                                BufferedWriter writer = new BufferedWriter(new FileWriter(s, false), 8192);
-//                                writer.write("FILE \"" + fileToPlay.substring(fileToPlay.lastIndexOf('/') + 1) + "\" WAV\n");
-//                                for (int j = 0; j < qq.length; j++) {
-//                                    int track_time = qq[j];
-//                                    String tr = String.format("  TRACK %02d AUDIO\n    TITLE \"%s %d\"\n    INDEX 01 ",
-//                                            j + 1, getString(R.string.strCueTrack), j + 1);
-//                                    String gg = String.format((track_time < 3600) ? "%02d:%02d:00\n" : "%d:%02d:00\n", track_time / 60, track_time % 60);
-//                                    writer.write(tr + gg);
-//                                }
-//                                writer.close();
-//                                if (!setAdapter()) {
-//                                    log_err("error setting adapter for new cue " + qz.toString());
-//                                }
-//                                return;
-//                            } else {
-//                                log_msg("No embedded CUE found");
-//                            }
-//                        }
-//                    }
-//                    if (cc == null || cdr.compareTo(cc) != 0 || playlist_changed) {
-//                        playlist_changed = false;
-//                        if (cur_album_id != 0) {
-//                            ArrayList<String> filly = new ArrayList<String>();
-//                            for (int j = first_file_pos; j < files.size(); j++) {
-//                                filly.add(files.get(j));
-//                            }
-//                            playContents(cdr, filly, null, null, curpos, curtime);
-//                        } else if (hasCueExt(cdr)) {
-//                            playContents(cdr, files, track_names, start_times, curpos, curtime);
-//                        } else if (hasPlistExt(cdr)) {
-//                            playContents(cdr, files, null, null, curpos, curtime);
-//                        }
-//                    } else {
-//                        srv.set_driver_mode(prefs.driver_mode);
-//                        if (!srv.play(curpos, curtime)) {
-//                            Toast.makeText(getApplicationContext(), R.string.strSrvFail, Toast.LENGTH_SHORT).show();
-//                            log_err("failed to start playing <single file>");
-//                        }
-//                        buttPause.setBackgroundDrawable(getResources().getDrawable(R.drawable.s_pause));
-//                    }
-//                } catch (Exception e) {
-//                    e.printStackTrace();
-//                    log_err("exception in selItem: " + e.toString());
-//                }
-//            }
-            //} else log_err("Attempt to play non-existing file");
+            pause_on_start = false;
+            if (i == 0 && a != null) {
+                onButtUp();
+                return;
+            }
+            k = k - 1;
+            if ((int) k >= files.size() && a != null) {
+                log_err("clicked item out of range! i: " + i + " k: " + k);
+                return;
+            }
+
         }
     };
     // If a playlist or cue was long-pressed, its contents are sent to server, and playback

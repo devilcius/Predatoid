@@ -2,8 +2,6 @@ package com.predatum;
 
 import java.io.DataOutputStream;
 import java.io.File;
-import java.util.Timer;
-import java.util.TimerTask;
 
 import android.app.Notification;
 import android.app.NotificationManager;
@@ -16,7 +14,6 @@ import android.content.IntentFilter;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.net.Uri;
-import android.os.Build;
 import android.os.IBinder;
 import android.os.PowerManager;
 import android.os.Process;
@@ -29,66 +26,6 @@ import android.util.Log;
 
 public class PredatoidSrv extends Service {
 
-//    static {
-//        System.loadLibrary("lossless");
-//    }
-
-//    public static native int audioInit(int ctx, int mode);
-//
-//    public static native boolean audioExit(int ctx);
-//
-//    public static native boolean audioStop(int ctx);
-//
-//    public static native boolean audioPause(int ctx);
-//
-//    public static native boolean audioResume(int ctx);
-//
-//    public static native int audioGetDuration(int ctx);
-//
-//    public static native int audioGetCurPosition(int ctx);
-//
-//    public static native boolean audioSetVolume(int ctx, int vol);
-//
-//    public static native int alacPlay(int ctx, String file, int start);
-//
-//    public static native int flacPlay(int ctx, String file, int start);
-//
-//    public static native int apePlay(int ctx, String file, int start);
-//
-//    public static native int wavPlay(int ctx, String file, int start);
-//
-//    public static native int wvPlay(int ctx, String file, int start);
-//
-//    public static native int mpcPlay(int ctx, String file, int start);
-//
-//    public static native int[] extractFlacCUE(String file);
-//
-//    public static native int wvDuration(int ctx, String file);
-//
-//    public static native int apeDuration(int ctx, String file);
-//
-//    public static native boolean libInit(int sdk);
-//
-//    public static native boolean libExit();
-    /*
-    public native int 		audioInit(int ctx, int mode);
-    public native boolean	audioExit(int ctx);
-    public native boolean	audioStop(int ctx);
-    public native boolean	audioPause(int ctx);
-    public native boolean	audioResume(int ctx);
-
-    public native int		audioGetDuration(int ctx);
-    public native int		audioGetCurPosition(int ctx);
-    public native boolean	audioSetVolume(int ctx, int vol);
-
-    public native int		alacPlay(int ctx,String file, int start);
-    public native int		flacPlay(int ctx,String file, int start);
-    public native int		apePlay(int ctx,String file, int start);
-    public native int		wavPlay(int ctx,String file, int start);
-    public native int		wvPlay(int ctx,String file, int start);
-    public native int		mpcPlay(int ctx,String file, int start);
-    public native int []	extractFlacCUE(String file);
-     */
     // errors returned by xxxPlay functions
     public static final int LIBLOSSLESS_ERR_NOCTX = 1;
     public static final int LIBLOSSLESS_ERR_INV_PARM = 2;
@@ -346,67 +283,6 @@ public class PredatoidSrv extends Service {
             }
             return true;
         }
-
-        // Used for cue files to update current track number and name.
-//        private class CueUpdater {
-//
-//            private class CUETimerTask extends TimerTask {
-//
-//                public void run() {
-//                    cur_pos++;
-//                    cur_start = 0;
-//                    if (cur_pos < names.length && names[cur_pos] != null) {
-//                        if (cur_pos + 1 < files.length) {
-//                            curTrackLen = times[cur_pos + 1] - times[cur_pos];
-//                        } else {
-//                            curTrackLen = total_cue_len - times[cur_pos];
-//                        }
-//                        curTrackStart = getCurPosition(); // audioGetCurPosition(ctx);
-//                        log_msg("track name = " + names[cur_pos] + ", curTrackLen=" + curTrackLen + ", curTrackStart=" + curTrackStart);
-//                        informTrack(names[cur_pos], false);
-//                    }
-//                    if (cur_pos + 1 < names.length) {
-//                        schedule((times[cur_pos + 1] - times[cur_pos]) * 1000);
-//                    }
-//                }
-//            }
-//            private Timer timer;
-//            private CUETimerTask timer_task;
-//            private long last_time_left;
-//            private long last_time_start;
-//
-//            public void shutdown() {
-//                if (timer_task != null) {
-//                    timer_task.cancel();
-//                }
-//                if (timer != null) {
-//                    timer.cancel();
-//                }
-//            }
-//
-//            private void reset() {
-//                shutdown();
-//                timer_task = new CUETimerTask();
-//                timer = new Timer();
-//            }
-//
-//            public synchronized void schedule(long delay) {
-//                reset();
-//                last_time_left = delay;
-//                last_time_start = System.currentTimeMillis();
-//                timer.schedule(timer_task, delay);
-//            }
-//
-//            public synchronized void pause() {
-//                reset();
-//                last_time_left -= (System.currentTimeMillis() - last_time_start);
-//            }
-//
-//            public synchronized void resume() {
-//                last_time_start = System.currentTimeMillis();
-//                timer.schedule(timer_task, last_time_left);
-//            }
-//        }
         private boolean permsOkay = false;
 
         private boolean initAudioMode(int mode) {
@@ -420,19 +296,7 @@ public class PredatoidSrv extends Service {
                 }
             }
             log_msg("initAudioMode(" + mode + "), permsOkay=" + permsOkay);
-//            try {
-//                ctx = audioInit(ctx, mode);
-//            } catch (Exception e) {
-//                log_err("exception in audioInit(): " + e.toString());
-//                return false;
-//            }
-//            if (ctx == 0) {
-//                log_err("audioInit() failed");
-//                return false;
-//            }
-//            if (mode == MODE_DIRECT) {
-//                audioSetVolume(ctx, volume);
-//            }
+
             cur_mode = mode;
             return true;
         }
@@ -445,10 +309,7 @@ public class PredatoidSrv extends Service {
                     currentPosition = mplayer.getCurrentPosition() / 1000;
                 }
             }
-//            if (ctx == 0) {
-//                return 0;
-//            }
-//            return audioGetCurPosition(ctx) + cur_start;
+
             return currentPosition;
         }
 
@@ -463,9 +324,7 @@ public class PredatoidSrv extends Service {
                     duration = mplayer.getDuration() / 1000;
                 }
             }
-//            if (ctx == 0) {
-//                return 0;
-//            }
+
             return duration;
         }
 
@@ -548,14 +407,7 @@ public class PredatoidSrv extends Service {
                 if (k == 0) {
                     informTrack(getString(R.string.strStopped), true);
                 }
-//                try {
-//                    if (cup != null) {
-//                        cup.shutdown();
-//                    }
-//                } catch (Exception e) {
-//                    log_err("Timer exception in run(): " + e.toString());
-//                }
-//                cup = null;
+
                 running = false;
             }
 
@@ -573,14 +425,6 @@ public class PredatoidSrv extends Service {
                 int tid = th.getThreadId();
                 int k = 0;
 
-//                try {
-//                    if (cup != null) {
-//                        cup.shutdown();
-//                    }
-//                } catch (Exception e) {
-//                    log_err("Timer exception in stop(): " + e.toString());
-//                }
-//                cup = null;
                 log_msg(String.format("stop(): terminating thread %d from %d", tid, Process.myTid()));
                 Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO);
                 if (mplayer == null) {
@@ -669,17 +513,12 @@ public class PredatoidSrv extends Service {
             } else {
                 int i = Process.getThreadPriority(Process.myTid());
                 Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO);
-//                if (audioPause(ctx)) {
-//                    paused = true;
-//                }
                 Process.setThreadPriority(i);
             }
             if (wakeLock.isHeld()) {
                 wakeLock.release();
             }
-//            if (cup != null) {
-//                cup.pause();
-//            }
+
             return paused == true;
         }
 
@@ -699,18 +538,12 @@ public class PredatoidSrv extends Service {
             } else {
                 int i = Process.getThreadPriority(Process.myTid());
                 Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO);
-//                if (audioResume(ctx)) {
-//                    paused = false;
-//                }
                 Process.setThreadPriority(i);
             }
 
             if (!paused && !wakeLock.isHeld()) {
                 wakeLock.acquire();
             }
-//            if (cup != null) {
-//                cup.resume();
-//            }
             return paused == false;
         }
 
@@ -726,9 +559,6 @@ public class PredatoidSrv extends Service {
             Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO);
             if (volume >= 0x400) {
                 volume -= 0x400;
-//                audioSetVolume(ctx, volume);
-            } else if (volume != 0) {
-//                audioSetVolume(ctx, 0);
             }
             Process.setThreadPriority(i);
             return true;
@@ -800,9 +630,6 @@ public class PredatoidSrv extends Service {
 
         public boolean shutdown() {
             plist.stop();
-//            if (ctx != 0) {
-//                audioExit(ctx);
-//            }
             ctx = 0;
             return true;
         }
@@ -877,21 +704,11 @@ public class PredatoidSrv extends Service {
             }
         }
 
-        ;
-
         public void unregisterCallback(IPredatoidSrvCallback cb) {
             if (cb != null) {
                 cBacks.unregister(cb);
             }
         }
-
-        ;
-
-//        public int[] get_cue_from_flac(String file) {
-//            return extractFlacCUE(file);
-//        }
-
-        ;
 
         public void launch(String path) {
             if (launcher != null) {
@@ -899,7 +716,6 @@ public class PredatoidSrv extends Service {
             }
         }
 
-        ;
     };
 
     private class Launcher {
@@ -935,11 +751,6 @@ public class PredatoidSrv extends Service {
             nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         }
         Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO);
-        //if(!libInit(Build.VERSION.SDK_INT)) {
-//        if (!libInit(Integer.parseInt(Build.VERSION.SDK))) {
-//            log_err("cannot initialize atrack library");
-//            stopSelf();
-//        }
     }
 
     @Override
@@ -951,16 +762,13 @@ public class PredatoidSrv extends Service {
         if (plist != null && plist.running) {
             plist.stop();
         }
-//        if (ctx != 0) {
-//            audioExit(ctx);
-//        }
+
         if (wakeLock != null && wakeLock.isHeld()) {
             wakeLock.release();
         }
         if (nm != null) {
             nm.cancel(NOTIFY_ID);
         }
-//        libExit();
     }
 
     @Override
