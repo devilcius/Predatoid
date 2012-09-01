@@ -16,7 +16,6 @@ interface IPredatoidSrv {
 	boolean shutdown();
 	boolean is_running();
 	boolean is_paused();
-	boolean initialized();
 	int 	get_cur_mode();
 	String  get_cur_dir();
 	int		get_cur_pos();

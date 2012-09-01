@@ -44,7 +44,6 @@ import android.view.MenuItem;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.view.animation.AnimationUtils;
-import android.widget.Adapter;
 import android.widget.AdapterView;
 import android.widget.Button;
 import android.widget.CheckBox;
@@ -62,8 +61,6 @@ import com.predatum.iconifiedlist.IconifiedTextListAdapter;
 
 import java.util.HashMap;
 import java.util.concurrent.TimeUnit;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 public class Predatoid extends Activity implements Comparator<File> {
 
@@ -77,8 +74,8 @@ public class Predatoid extends Activity implements Comparator<File> {
     private ArrayList<String> files = new ArrayList<String>();
     // Full paths to files in current playlist
     private ArrayList<String> filesToPlay = new ArrayList<String>();
-    // Track names in cue file
-    private ArrayList<String> track_names = new ArrayList<String>();
+    // Track names to be displayed in status bar
+    private ArrayList<String> songNames = new ArrayList<String>();
     // Track start times (seconds) in cue file
     private ArrayList<Integer> start_times = new ArrayList<Integer>();
     // Index of 1st audio file in directoryEntries list (below directories, cues, and playlists)
@@ -573,8 +570,8 @@ public class Predatoid extends Activity implements Comparator<File> {
     }
 
     // Load the server playlist with contents of arrays, and play starting from the k-th item @ time start.
-    private boolean playContents(String fpath, ArrayList<String> audioFiles, ArrayList<String> songNames,
-            ArrayList<Integer> startTimes, int trackNum, int startPos) {
+    private boolean playContents(String fpath, ArrayList<String> audioFiles, ArrayList<String> songs,
+            int trackNum, int startPos) {
         try {
             if (!srv.init_playlist(fpath, audioFiles.size())) {
                 log_err("failed to initialize new playlist on server");
@@ -582,7 +579,7 @@ public class Predatoid extends Activity implements Comparator<File> {
                 return false;
             }
             for (int i = 0; i < audioFiles.size(); i++) {
-                if (!srv.addToPlaylist(audioFiles.get(i), (songNames != null) ? songNames.get(i) : null, (songNames != null) ? startTimes.get(i) : 0, i)) {
+                if (!srv.addToPlaylist(audioFiles.get(i), (songs != null) ? songs.get(i) : null, 0, i)) {
                     log_err("failed to add a file to server playlist");
                     Toast.makeText(getApplicationContext(), R.string.strSrvFail, Toast.LENGTH_SHORT).show();
                     return false;
@@ -653,18 +650,18 @@ public class Predatoid extends Activity implements Comparator<File> {
             setAdapter();
 
             if (readyToPlay) {
-                playContents(startfile, filesToPlay, null, null, i, i);
+                playContents(startfile, filesToPlay, songNames, 0, i);
             }
             pause_on_start = false;
-            if (i == 0 && a != null) {
-                onButtUp();
-                return;
-            }
-            k = k - 1;
-            if ((int) k >= files.size() && a != null) {
-                log_err("clicked item out of range! i: " + i + " k: " + k);
-                return;
-            }
+//            if (i == 0 && a != null) {
+//                onButtUp();
+//                return;
+//            }
+//            k = k - 1;
+//            if ((int) k >= files.size() && a != null) {
+//                log_err("clicked item out of range! i: " + i + " k: " + k);
+//                return;
+//            }
 
         }
     };
@@ -1626,10 +1623,6 @@ public class Predatoid extends Activity implements Comparator<File> {
     private boolean playPath(File fpath) {
         if (fpath.isDirectory()) {
             return playDir(fpath, null);
-        } else if (hasPlistExt(fpath)) {
-            return playPlaylist(fpath);
-        } else if (hasCueExt(fpath)) {
-            return playCue(fpath);
         }
         return false;
     }
@@ -1710,7 +1703,7 @@ public class Predatoid extends Activity implements Comparator<File> {
                 k = i - r.dirs - r.cues;
             }
         }
-        return playContents(fpath.toString(), filly, null, null, k, 0);
+        return playContents(fpath.toString(), filly, null, k, 0);
     }
 
     private ArrayList<String> recurseDir(File fpath) {
@@ -1874,7 +1867,7 @@ public class Predatoid extends Activity implements Comparator<File> {
         if (filez == null) {
             return false;
         }
-        return playContents(fpath.toString(), filez, null, null, 0, 0);
+        return playContents(fpath.toString(), filez, null, 0, 0);
     }
 
     private boolean setAdapterFromAlbum() {
@@ -1885,6 +1878,7 @@ public class Predatoid extends Activity implements Comparator<File> {
             Cursor cursor = resolver.query(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, new String[]{"ALBUM", "ARTIST", "YEAR", "TITLE", "TRACK", "_display_name", "_data", "_size", "duration"}, "album_id=" + curAlbumID, null, "TRACK");
             int trackNum = 1;
             filesToPlay.clear();
+            songNames.clear();
             while (cursor.moveToNext()) {
 
                 HashMap song = new HashMap();
@@ -1905,6 +1899,8 @@ public class Predatoid extends Activity implements Comparator<File> {
 
                 //fills list of files path of current playlist
                 filesToPlay.add(cursor.getString(6));
+                //fills list of track names to be shown in the status bar
+                songNames.add(cursor.getString(3) + " from " + cursor.getString(1));
 
                 trackNum++;
 
@@ -2079,62 +2075,6 @@ public class Predatoid extends Activity implements Comparator<File> {
         }
         Toast.makeText(getApplicationContext(), R.string.strBadCue, Toast.LENGTH_SHORT).show();
         return null;
-    }
-
-    private boolean playCue(File fpath) {
-        parsed_cue r = parseCue(fpath);
-        if (r == null) {
-            return false;
-        }
-        return playContents(fpath.toString(), r.filez, r.namez, r.timez, 0, 0);
-    }
-
-    private boolean setAdapterFromCue(File fpath) {
-        try {
-            ArrayList<String> filez;
-            ArrayList<String> namez;
-            ArrayList<Integer> timez;
-
-            parsed_cue r = parseCue(fpath);
-            if (r == null) {
-                return false;
-            }
-
-            filez = r.filez;
-            namez = r.namez;
-            timez = r.timez;
-
-//            cur_album_id = fpath;
-            first_file_pos = 0;
-
-            files.clear();
-            if (track_names.size() > 0) {
-                track_names.clear();
-            }
-            if (start_times.size() > 0) {
-                start_times.clear();
-            }
-            albumEntries.clear();
-            Drawable dir_icon = getResources().getDrawable(R.drawable.folder);
-            Drawable aud_icon = getResources().getDrawable(R.drawable.audio1);
-            albumEntries.add(new IconifiedText("...", "", dir_icon, curAlbumID));
-            for (int i = 0; i < filez.size(); i++) {
-                files.add(filez.get(i));
-                track_names.add(namez.get(i));
-                start_times.add(timez.get(i));
-                albumEntries.add(new IconifiedText(namez.get(i), "", aud_icon, curAlbumID));
-            }
-
-            IconifiedTextListAdapter ita = new IconifiedTextListAdapter(this);
-            ita.setListItems(albumEntries);
-            fileList.setAdapter(ita);
-
-            return true;
-
-        } catch (Exception e) {
-            log_err("exception in setAdapterFromCue(): " + e.toString());
-            return false;
-        }
     }
 
     private Boolean checkUTF16(File fpath) throws IOException {

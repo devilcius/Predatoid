@@ -26,25 +26,6 @@ import android.util.Log;
 
 public class PredatoidSrv extends Service {
 
-    // errors returned by xxxPlay functions
-    public static final int LIBLOSSLESS_ERR_NOCTX = 1;
-    public static final int LIBLOSSLESS_ERR_INV_PARM = 2;
-    public static final int LIBLOSSLESS_ERR_NOFILE = 3;
-    public static final int LIBLOSSLESS_ERR_FORMAT = 4;
-    public static final int LIBLOSSLESS_ERR_AU_GETCONF = 6;
-    public static final int LIBLOSSLESS_ERR_AU_SETCONF = 7;
-    public static final int LIBLOSSLESS_ERR_AU_BUFF = 8;
-    public static final int LIBLOSSLESS_ERR_AU_SETUP = 9;
-    public static final int LIBLOSSLESS_ERR_AU_START = 10;
-    public static final int LIBLOSSLESS_ERR_IO_WRITE = 11;
-    public static final int LIBLOSSLESS_ERR_IO_READ = 12;
-    public static final int LIBLOSSLESS_ERR_DECODE = 13;
-    public static final int LIBLOSSLESS_ERR_OFFSET = 14;
-    public static final int LIBLOSSLESS_ERR_NOMEM = 15;
-    // Audio context descriptor returned by audioInit().
-    // Actually, it's a pointer to struct msm_ctx, see native code.
-    // Used in all subsequent calls of native functions.
-    private static int ctx = 0;
     public static final int MODE_NONE = 0;
     public static final int MODE_DIRECT = 1;
     public static final int MODE_LIBMEDIA = 2;
@@ -128,9 +109,7 @@ public class PredatoidSrv extends Service {
                 mplayer = new MediaPlayer();
             }
             fck_start = start;
-            if (mplayer == null) {
-                return LIBLOSSLESS_ERR_NOCTX;
-            }
+
             mplayer.setDataSource(file);
             mplayer.setOnErrorListener(new MediaPlayer.OnErrorListener() {
 
@@ -178,7 +157,6 @@ public class PredatoidSrv extends Service {
             }
         } catch (Exception e) {
             log_err("Exception in extPlay(): " + e.toString());
-            return LIBLOSSLESS_ERR_INV_PARM;
         } finally {
             synchronized (mplayer_lock) {
                 if (mplayer != null) {
@@ -236,7 +214,6 @@ public class PredatoidSrv extends Service {
                 return false;
             }
 
-            dir = null;
             files = null;
             cur_pos = -1;
             th = null;
@@ -244,13 +221,8 @@ public class PredatoidSrv extends Service {
             running = false;
             times = null;
             names = null;
-//            cup = null;
             cur_mode = MODE_NONE;
             driver_mode = MODE_CALLBACK;
-
-            if (path != null) {
-                dir = new String(path);
-            }
             try {
                 files = new String[items];
                 names = new String[items];
@@ -304,10 +276,8 @@ public class PredatoidSrv extends Service {
         private int getCurPosition() {
             //	if(!running) return 0;
             int currentPosition = 0;
-            if (cur_mode == MODE_NONE) {
-                if (mplayer != null) {
-                    currentPosition = mplayer.getCurrentPosition() / 1000;
-                }
+            if (mplayer != null) {
+                currentPosition = mplayer.getCurrentPosition() / 1000;
             }
 
             return currentPosition;
@@ -316,15 +286,12 @@ public class PredatoidSrv extends Service {
         private int getDuration() {
             //	if(!running) return 0;
             int duration = 0;
-            if (cur_mode == MODE_NONE) {
-                do {
-                    SystemClock.sleep(200);
-                } while (!isPrepared);
-                if (mplayer != null && isPrepared) {
-                    duration = mplayer.getDuration() / 1000;
-                }
+            do {
+                SystemClock.sleep(200);
+            } while (!isPrepared);
+            if (mplayer != null && isPrepared) {
+                duration = mplayer.getDuration() / 1000;
             }
-
             return duration;
         }
 
@@ -346,34 +313,20 @@ public class PredatoidSrv extends Service {
                     try {
                         curTrackLen = 0;
                         curTrackStart = 0;
-                        last_cue_start = 0;
                         total_cue_len = 0;
 
-                        if (names[cur_pos] != null) {	// this is CUE track
+                        if (names[cur_pos] != null) {
                             log_msg("track name = " + names[cur_pos]);
-                            if (cur_pos + 1 < files.length) {
-                                informTrack(names[cur_pos], false);
-                                if (times[cur_pos + 1] > times[cur_pos]) {
-                                    curTrackLen = times[cur_pos + 1] - times[cur_pos]; // native thread won't update this track length but will save total_cue_len
-                                    last_cue_start = -1;						   // so that we'll be able to update the last track length in due time from CueUpdater
-//                                    cup = new CueUpdater();
-//                                    cup.schedule((times[cur_pos + 1] - times[cur_pos]) * 1000 - cur_start * 1000);
-                                }
-                            } else {	// last CUE track
-                                informTrack(names[cur_pos], false);
-                                last_cue_start = times[cur_pos]; // native thread will subtract this from the total cue length
-                            }
+                            informTrack(names[cur_pos], false);
                         } else {
+
                             String cur_file = files[cur_pos];
                             int start = cur_file.lastIndexOf("/") + 1;
                             int end = cur_file.lastIndexOf(".");
                             String cf = end > start ? cur_file.substring(start, end) : cur_file.substring(start);
                             informTrack(cf, false);
                         }
-
-                        if (initAudioMode(MODE_NONE)) {
-                            k = extPlay(files[cur_pos], times[cur_pos] + cur_start);
-                        }
+                        k = extPlay(files[cur_pos], times[cur_pos] + cur_start);
 
                         nm.cancel(NOTIFY_ID);
                     } catch (Exception e) {
@@ -396,9 +349,9 @@ public class PredatoidSrv extends Service {
                         informTrack(err, true);
                         break;
                     }
-                    if (names[0] != null) {
-                        break; // just in case
-                    }
+//                    if (names[0] != null) {
+//                        break; // just in case
+//                    }
                 }
                 if (wakeLock.isHeld()) {
                     wakeLock.release();
@@ -427,9 +380,7 @@ public class PredatoidSrv extends Service {
 
                 log_msg(String.format("stop(): terminating thread %d from %d", tid, Process.myTid()));
                 Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO);
-                if (mplayer == null) {
-//                    audioStop(ctx);
-                } else {
+                if (mplayer != null) {
                     synchronized (mplayer_lock) {
                         mplayer_lock.notify();
                     }
@@ -576,7 +527,6 @@ public class PredatoidSrv extends Service {
             Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO);
             if (volume <= 0x2000) {
                 volume += 0x400;
-//                audioSetVolume(ctx, volume);
             }
             Process.setThreadPriority(i);
             return true;
@@ -630,17 +580,12 @@ public class PredatoidSrv extends Service {
 
         public boolean shutdown() {
             plist.stop();
-            ctx = 0;
             return true;
         }
 
         public boolean is_running() {
             return plist.running;
         }
-
-        public boolean initialized() {
-            return ctx != 0;
-        }	// why this function?
 
         public boolean is_paused() {
             return plist.paused;
@@ -715,7 +660,6 @@ public class PredatoidSrv extends Service {
                 launcher.launch(path);
             }
         }
-
     };
 
     private class Launcher {
