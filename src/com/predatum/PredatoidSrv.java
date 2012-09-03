@@ -51,14 +51,9 @@ public class PredatoidSrv extends Service {
     public static int curTrackLen = 0;
     public static int curTrackStart = 0;
     private static int last_cue_start = 0;
-    private static int total_cue_len = 0;
 
     // Callback to be called from native code
     public static void updateTrackLen(int time) {
-        if (last_cue_start == -1) {
-            total_cue_len = time;	// track time already updated from the cue, just save total length for the last track
-            return;
-        }
         curTrackLen = time - last_cue_start;
     }
     // Callback used to send new track name or error status to the interface thread.
@@ -69,10 +64,10 @@ public class PredatoidSrv extends Service {
         for (int i = 0; i < k; i++) {
             try {
                 if (!error) {
-                    cBacks.getBroadcastItem(i).playItemChanged(false, s);
+                    cBacks.getBroadcastItem(i).playItemChanged(false, s, plist.cur_pos);
                     PredatoidSrv.this.notify(R.drawable.play_on/*R.drawable.playbackstart*/, s);
                 } else {
-                    cBacks.getBroadcastItem(i).playItemChanged(true, getString(R.string.strStopped));
+                    cBacks.getBroadcastItem(i).playItemChanged(true, getString(R.string.strStopped), plist.cur_pos);
                     if (s.compareTo(getString(R.string.strStopped)) != 0) {
                         cBacks.getBroadcastItem(i).errorReported(s);
                     }
@@ -313,7 +308,6 @@ public class PredatoidSrv extends Service {
                     try {
                         curTrackLen = 0;
                         curTrackStart = 0;
-                        total_cue_len = 0;
 
                         if (names[cur_pos] != null) {
                             log_msg("track name = " + names[cur_pos]);

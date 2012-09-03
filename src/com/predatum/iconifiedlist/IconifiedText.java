@@ -11,16 +11,22 @@ public class IconifiedText {
         private Drawable mIcon;
         private boolean mSelectable = true;
         private int albumID = 0;
+        private boolean isFolder = true;
 
-        public IconifiedText(String upperText, String bottomText, Drawable bullet, int AlbumID) {
+        public IconifiedText(String upperText, String bottomText, Drawable bullet, int albumID, boolean isFolder) {
                 mIcon = bullet;
                 this.topText = upperText;
                 this.bottomText = bottomText;
-                this.albumID = AlbumID;
+                this.albumID = albumID;
+                this.isFolder = isFolder;
         }
 
         public boolean isSelectable() {
                 return mSelectable;
+        }
+
+        public boolean isFolder() {
+                return isFolder;
         }
 
         public void setSelectable(boolean selectable) {
@@ -50,7 +56,7 @@ public class IconifiedText {
         public Drawable getIcon() {
                 return mIcon;
         }
-        public void setAlbuID(int id) {
+        public void setAlbumID(int id) {
                 albumID = id;
         }
 

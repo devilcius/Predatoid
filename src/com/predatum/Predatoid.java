@@ -24,6 +24,7 @@ import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.database.Cursor;
+import android.graphics.Color;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.AsyncTask;
@@ -77,10 +78,11 @@ public class Predatoid extends Activity implements Comparator<File> {
     // Track names to be displayed in status bar
     private ArrayList<String> songNames = new ArrayList<String>();
     // Track start times (seconds) in cue file
-    private ArrayList<Integer> start_times = new ArrayList<Integer>();
     // Index of 1st audio file in directoryEntries list (below directories, cues, and playlists)
     private int first_file_pos;
     // At the start, set this flag and emulate the pause if the last file was bookmarked
+    //currentTrack playing or paused
+    private int currentTrack = 0;
     private boolean pause_on_start = false;
     // Changed to true in playlists/settings dialogs
     private boolean playlist_changed = false;
@@ -108,14 +110,20 @@ public class Predatoid extends Activity implements Comparator<File> {
     // Callback for server to report track/state changes.  Invokes the above handler to set window title.
     private IPredatoidSrvCallback cBack = new IPredatoidSrvCallback.Stub() {
 
-        public void playItemChanged(boolean error, String name) {
+        public void playItemChanged(boolean error, String name, final int trackNum) {
             log_msg(String.format("track name changed to %s", name));
+            log_msg(String.format("track num = %s", trackNum));
+            log_msg(String.format("filelist count = %s", fileList.getChildCount()));
             Message msg = new Message();
             Bundle data = new Bundle();
             data.putString("filename", name);
             data.putBoolean("error", error);
             msg.setData(data);
             hdl.sendMessage(msg);
+            if (fileList.getChildCount() > 0) {
+                currentTrack = trackNum;
+                new SendSrvCmd().execute(SendSrvCmd.cmd_hilight_item);
+            }
         }
 
         public void errorReported(String name) {
@@ -187,13 +195,6 @@ public class Predatoid extends Activity implements Comparator<File> {
                                 playDir(f, startfile);
                                 return;
                             }
-                        } else if (f.exists() && (f.isDirectory() || hasPlistExt(startfile) || hasCueExt(startfile))) {
-                            if (setAdapter()) {
-                                srv.registerCallback(cBack);
-                                update_headset_mode(null);
-                                playPath(f);
-                                return;
-                            }
                         }
                         throw new NullPointerException();
                     }
@@ -209,14 +210,14 @@ public class Predatoid extends Activity implements Comparator<File> {
                                         fileList.setSelection(first_file_pos + i);
                                     }
                                     if (srv.is_paused()) {
-                                        cBack.playItemChanged(true, getString(R.string.strPaused));
+                                        cBack.playItemChanged(true, getString(R.string.strPaused), first_file_pos + i);
                                         buttPause.setBackgroundDrawable(getResources().getDrawable(R.drawable.s_play));
                                     } else if (srv.is_running()) {
 
-                                        cBack.playItemChanged(false, albumEntries.get(first_file_pos + i).getTopText());
+                                        cBack.playItemChanged(false, albumEntries.get(first_file_pos + i).getTopText(), first_file_pos + i);
                                         buttPause.setBackgroundDrawable(getResources().getDrawable(R.drawable.s_pause));
                                     } else {
-                                        cBack.playItemChanged(true, getString(R.string.strStopped));
+                                        cBack.playItemChanged(true, getString(R.string.strStopped), first_file_pos + i);
                                     }
                                 } else {
                                     s = null;
@@ -235,11 +236,11 @@ public class Predatoid extends Activity implements Comparator<File> {
                         fileList.setSelection(0);
                         if (prefs.last_played_file != null && (new File(prefs.last_played_file)).exists() && !srv.is_running()) {
                             log_msg("bookmarked, starting from paused state");
-                            cBack.playItemChanged(true, getString(R.string.strPaused));
+                            cBack.playItemChanged(true, getString(R.string.strPaused), 0);
                             pause_on_start = true;
                             buttPause.setBackgroundDrawable(getResources().getDrawable(R.drawable.s_play));
                         } else {
-                            cBack.playItemChanged(true, getString(R.string.strStopped));
+                            cBack.playItemChanged(true, getString(R.string.strStopped), 0);
                         }
                     }
                     srv.registerCallback(cBack);
@@ -256,16 +257,17 @@ public class Predatoid extends Activity implements Comparator<File> {
         };
     }
 
-    // Helper class to improve interface responsiveness. When the user clicks a button, it executes
+    // Helper class to improve interface responsiveness. When the user clicks a button (play, pause, etc), it executes
     // the corresponding server command in background, and setups the UI upon its completion.
     private class SendSrvCmd extends AsyncTask<Integer, Void, Integer> {
 
-        public static final int cmd_pause = 1, cmd_prev = 2, cmd_next = 3, cmd_vol_up = 4, cmd_vol_down = 5;
+        public static final int cmd_pause = 1, cmd_prev = 2, cmd_next = 3, cmd_vol_up = 4, cmd_vol_down = 5, cmd_hilight_item = 6;
         private final int dont_change_btn = 0, change_to_pause_btn = 1, change_to_play_btn = 2;
         private String now_playing = null;
 
         protected Integer doInBackground(Integer... func) {
             try {
+
                 switch (func[0]) {
                     case cmd_pause:
                         if (pause_on_start) {
@@ -308,6 +310,18 @@ public class Predatoid extends Activity implements Comparator<File> {
                     case cmd_vol_down:
                         srv.dec_vol();
                         break;
+                    case cmd_hilight_item:
+                        runOnUiThread(new Runnable() {
+
+                            public void run() {
+                                for (int i = 0; i < fileList.getChildCount(); i++) {
+                                    fileList.getChildAt(i).setBackgroundColor(Color.TRANSPARENT);
+                                }
+                                if (fileList.getChildCount() > 0 && currentTrack < fileList.getChildCount()) {
+                                    fileList.getChildAt(currentTrack).setBackgroundColor(Color.GREEN);
+                                }
+                            }
+                        });
                 }
             } catch (Exception e) {
                 log_err("exception in SendSrvCmd (" + func[0] + "): " + e.toString());
@@ -650,8 +664,15 @@ public class Predatoid extends Activity implements Comparator<File> {
             setAdapter();
 
             if (readyToPlay) {
-                playContents(startfile, filesToPlay, songNames, 0, i);
+                if (iconifiedText.isFolder()) {
+                    playContents(startfile, filesToPlay, songNames, 0, i);
+                    currentTrack = 0;
+                } else {
+                    playContents(startfile, filesToPlay, songNames, i, i);
+                    currentTrack = i;
+                }
             }
+            new SendSrvCmd().execute(SendSrvCmd.cmd_hilight_item);
             pause_on_start = false;
 //            if (i == 0 && a != null) {
 //                onButtUp();
@@ -1773,7 +1794,7 @@ public class Predatoid extends Activity implements Comparator<File> {
                 albumEntries.add(new IconifiedText(
                         sdcardMusic.get(i).get("album").toString() + " " + sdcardMusic.get(i).get("year") + " (" + sdcardMusic.get(i).get("numsongs").toString() + " songs)",
                         sdcardMusic.get(i).get("artist").toString(),
-                        dir_icon, Integer.parseInt(sdcardMusic.get(i).get("album_id").toString())));
+                        dir_icon, Integer.parseInt(sdcardMusic.get(i).get("album_id").toString()), true));
             }
 
             IconifiedTextListAdapter ita = new IconifiedTextListAdapter(this);
@@ -1919,7 +1940,7 @@ public class Predatoid extends Activity implements Comparator<File> {
                         + trackList.get(i).get("title"),
                         songDurationFormat(Long.parseLong(trackList.get(i).get("duration").toString()))
                         + " :: " + trackList.get(i).get("genre"),
-                        songIcon, curAlbumID));
+                        songIcon, curAlbumID, false));
             }
 
             IconifiedTextListAdapter ita = new IconifiedTextListAdapter(this);
@@ -1929,7 +1950,7 @@ public class Predatoid extends Activity implements Comparator<File> {
             return true;
 
         } catch (Exception e) {
-            Log.e(this.getClass().getName(),"exception in setAdapterFromAlbum(): " + e.toString());
+            Log.e(this.getClass().getName(), "exception in setAdapterFromAlbum(): " + e.toString());
             return false;
         }
     }
