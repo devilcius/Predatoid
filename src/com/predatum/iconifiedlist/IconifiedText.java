@@ -25,7 +25,7 @@ public class IconifiedText {
                 return mSelectable;
         }
 
-        public boolean isFolder() {
+        public boolean hasChildren() {
                 return isFolder;
         }
 
