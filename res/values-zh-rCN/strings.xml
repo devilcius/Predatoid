@@ -69,7 +69,7 @@
 <string name="strCantRemovePlist">无法删除旧播放列表！</string>
 <string name="strSrvInitFail">服务器无法初始化。退出！</string>
 <string name="strMplayerError">媒体播放器错误 </string>
-<string name="strDriverMode">直接访问硬件</string>
+<string name="strLoopMode">在循環播放模式</string>
 <string name="strSaveBooks">自动保存标签</string>
 <string name="strAbout">Predatoid, based on andLess Android player</string>
 <string name="strAbout1">关于</string>

@@ -4,13 +4,10 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Comparator;
 import java.util.Timer;
 import java.util.TimerTask;
 import android.app.Activity;
 import android.app.AlertDialog;
-import android.app.Dialog;
 import android.content.ComponentName;
 import android.content.ContentResolver;
 import android.content.DialogInterface;
@@ -23,7 +20,6 @@ import android.graphics.Color;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.AsyncTask;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
@@ -34,7 +30,6 @@ import android.preference.PreferenceManager;
 import android.provider.MediaStore;
 import android.util.Log;
 import android.view.KeyEvent;
-import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
@@ -43,8 +38,6 @@ import android.view.View.OnClickListener;
 import android.view.animation.AnimationUtils;
 import android.widget.AdapterView;
 import android.widget.Button;
-import android.widget.CheckBox;
-import android.widget.EditText;
 import android.widget.ListView;
 import android.widget.SeekBar;
 import android.widget.TextView;
@@ -61,7 +54,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-public class Predatoid extends Activity implements Comparator<File> {
+public class Predatoid extends Activity {
 
     // Currently playing album id
     private int currDisplayedAlbumID = 0;
@@ -77,17 +70,12 @@ public class Predatoid extends Activity implements Comparator<File> {
     private ArrayList<String> filesToPlay = new ArrayList<String>();
     // Track names to be displayed in status bar
     private ArrayList<String> songNames = new ArrayList<String>();
-    // Track start times (seconds) in cue file
-    // Index of 1st audio file in directoryEntries list (below directories, cues, and playlists)
-    private int firstFilePos;
     // At the start, set this flag and emulate the pause if the last file was bookmarked
     //currentTrack playing or paused
     private int currentTrack = 0;
     private boolean pauseOnStart = false;
     // Changed to true in playlists/settings dialogs
     private boolean playlistChanged = false;
-    // A song is list is displayed and ready to be played
-    private boolean readyToPlay = false;
     //Phone's back button go back to previous item list
     private boolean canGoBack = false;
 
@@ -179,55 +167,26 @@ public class Predatoid extends Activity implements Comparator<File> {
                 }
                 try {
 
-                    //	if(!srv.initialized()) {
-                    //		log_err("Server failed to initialize, exiting");
-                    //		errExit(getString(R.string.strSrvInitFail));
-                    //	}
                     obj.linkToDeath(bdeath, 0);
                     if (startfile != null) {	// we've been called via intent.VIEW
                         log_msg("connection using " + startfile);
                         File f = new File(startfile);
-                        if (f.exists() && !f.isDirectory() && hasAudioExt(startfile)) {
+                        if (f.exists() && !f.isDirectory()) {
                             int i = startfile.lastIndexOf('/');
                             f = new File(startfile.substring(0, i));
                             if (setAdapter() && i > 0) {
                                 log_msg("starting from \"" + startfile + "\" in \"" + f.toString() + "\"");
                                 srv.registerCallback(cBack);
                                 update_headset_mode(null);
-                                playDir(f, startfile);
+//                                playDir(f, startfile);
                                 return;
                             }
                         }
                         throw new NullPointerException();
                     }
-                    String s = srv.get_cur_dir();
+                    String s = srv.getCurrentDirectory();
                     if (s != null) {
                         File f = new File(s);
-                        if (f.exists() && (f.isDirectory() || hasPlistExt(s) || hasCueExt(s))) {
-                            try {
-                                if (setAdapter()) {
-                                    log_msg("restored previous playlist");
-                                    int i = srv.get_cur_pos() + 1;
-                                    if (i >= 0 && firstFilePos + i < albumEntries.size()) {
-                                        fileList.setSelection(firstFilePos + i);
-                                    }
-                                    if (srv.is_paused()) {
-                                        cBack.playItemChanged(true, getString(R.string.strPaused), firstFilePos + i);
-                                        buttPause.setBackgroundDrawable(getResources().getDrawable(R.drawable.s_play));
-                                    } else if (srv.is_running()) {
-
-                                        cBack.playItemChanged(false, albumEntries.get(firstFilePos + i).getTopText(), firstFilePos + i);
-                                        buttPause.setBackgroundDrawable(getResources().getDrawable(R.drawable.s_pause));
-                                    } else {
-                                        cBack.playItemChanged(true, getString(R.string.strStopped), firstFilePos + i);
-                                    }
-                                } else {
-                                    s = null;
-                                }
-                            } catch (Exception e) {
-                                log_err("exception in pause button handler");
-                            }
-                        }
                     }
 
                     if (s == null) {
@@ -236,7 +195,7 @@ public class Predatoid extends Activity implements Comparator<File> {
                             log_err("cannot set default adapter!!!");
                         }
                         fileList.setSelection(0);
-                        if (prefs.last_played_file != null && (new File(prefs.last_played_file)).exists() && !srv.is_running()) {
+                        if (prefs.lastPlayedFile != null && (new File(prefs.lastPlayedFile)).exists() && !srv.isRunning()) {
                             log_msg("bookmarked, starting from paused state");
                             cBack.playItemChanged(true, getString(R.string.strPaused), 0);
                             pauseOnStart = true;
@@ -263,9 +222,9 @@ public class Predatoid extends Activity implements Comparator<File> {
     // the corresponding server command in background, and setups the UI upon its completion.
     private class SendSrvCmd extends AsyncTask<Integer, Void, Integer> {
 
-        public static final int cmd_pause = 1, cmd_prev = 2, cmd_next = 3, cmd_vol_up = 4, cmd_vol_down = 5, cmd_hilight_item = 6;
+        public static final int cmd_pause = 1, cmd_prev = 2, cmd_next = 3, cmd_hilight_item = 4;
         private final int dont_change_btn = 0, change_to_pause_btn = 1, change_to_play_btn = 2;
-        private String now_playing = null;
+        private String nowPlaying = null;
 
         protected Integer doInBackground(Integer... func) {
             try {
@@ -275,21 +234,21 @@ public class Predatoid extends Activity implements Comparator<File> {
                         if (pauseOnStart) {
                             return change_to_pause_btn;
                         }
-                        if (srv.is_paused()) {
-                            if (srv.resume() && srv.is_running()) {
-                                now_playing = curWindowTitle;
-                                if (now_playing != null) {
+                        if (srv.isPaused()) {
+                            if (srv.resume() && srv.isRunning()) {
+                                nowPlaying = curWindowTitle;
+                                if (nowPlaying != null) {
                                     return change_to_pause_btn;
                                 }
-                                now_playing = srv.get_cur_track_name();
-                                if (now_playing != null) {
+                                nowPlaying = srv.getCurrentTrackName();
+                                if (nowPlaying != null) {
                                     return change_to_pause_btn;
                                 }
-                                now_playing = srv.get_cur_track_source();
-                                if (now_playing != null) {
-                                    int i = now_playing.lastIndexOf('/');
+                                nowPlaying = srv.getCurrentTrackSource();
+                                if (nowPlaying != null) {
+                                    int i = nowPlaying.lastIndexOf('/');
                                     if (i >= 0) {
-                                        now_playing = now_playing.substring(i + 1);
+                                        nowPlaying = nowPlaying.substring(i + 1);
                                     }
                                 }
                                 return change_to_pause_btn;
@@ -299,18 +258,10 @@ public class Predatoid extends Activity implements Comparator<File> {
                         }
                         break;
                     case cmd_prev:
-                        srv.set_driver_mode(prefs.driver_mode);
-                        srv.play_prev();
+                        srv.playPrevious();
                         break;
                     case cmd_next:
-                        srv.set_driver_mode(prefs.driver_mode);
-                        srv.play_next();
-                        break;
-                    case cmd_vol_up:
-                        srv.inc_vol();
-                        break;
-                    case cmd_vol_down:
-                        srv.dec_vol();
+                        srv.playNext();
                         break;
                     case cmd_hilight_item:
                         runOnUiThread(new Runnable() {
@@ -319,8 +270,9 @@ public class Predatoid extends Activity implements Comparator<File> {
                                 for (int i = 0; i < fileList.getChildCount(); i++) {
                                     fileList.getChildAt(i).setBackgroundColor(Color.TRANSPARENT);
                                 }
-                                if(currDisplayedAlbumID != currPlayingAlbumID)
+                                if (currDisplayedAlbumID != currPlayingAlbumID) {
                                     return;
+                                }
                                 if (fileList.getChildCount() > 0 && currentTrack < fileList.getChildCount()) {
                                     fileList.getChildAt(currentTrack).setBackgroundColor(Color.GREEN);
                                 }
@@ -342,8 +294,8 @@ public class Predatoid extends Activity implements Comparator<File> {
                     if (pauseOnStart) {
                         selItem.onItemClick(null, null, 0, 0); // dirty hack
                     }
-                    if (now_playing != null) {
-                        getWindow().setTitle(now_playing);
+                    if (nowPlaying != null) {
+                        getWindow().setTitle(nowPlaying);
                     }
                     buttPause.setBackgroundDrawable(getResources().getDrawable(R.drawable.s_pause));
                     break;
@@ -355,143 +307,30 @@ public class Predatoid extends Activity implements Comparator<File> {
             pauseOnStart = false;
         }
     }
-    private boolean samsung = false;
     View.OnClickListener onButtPause = new OnClickListener() {
 
-        private String now_playing = null;
-
         public void onClick(View v) {
-            if (samsung) {
-                try {
-                    if (srv == null) {
-                        errExit(R.string.strErrSrvZero);
-                    }
-                    if (srv.is_paused()) {
-                        if (srv.resume() && srv.is_running()) {
-                            now_playing = curWindowTitle;
-                            if (now_playing == null) {
-                                now_playing = srv.get_cur_track_name();
-                                if (now_playing == null) {
-                                    now_playing = srv.get_cur_track_source();
-                                    if (now_playing != null) {
-                                        int i = now_playing.lastIndexOf('/');
-                                        if (i >= 0) {
-                                            now_playing = now_playing.substring(i + 1);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        if (now_playing != null) {
-                            getWindow().setTitle(now_playing);
-                        }
-                        buttPause.setBackgroundDrawable(getResources().getDrawable(R.drawable.s_pause));
-                    } else if (srv.pause()) {
-                        getWindow().setTitle(getString(R.string.strPaused));
-                        buttPause.setBackgroundDrawable(getResources().getDrawable(R.drawable.s_play));
-                    }
-                } catch (RemoteException e) {
-                    log_err("exception in pause button handler");
-                }
-            } else {
-                new SendSrvCmd().execute(SendSrvCmd.cmd_pause);
-            }
+
+            new SendSrvCmd().execute(SendSrvCmd.cmd_pause);
         }
     };
-
-    private void enableVolumeButtons(boolean enable) {
-        if (buttVPlus == null || buttVMinus == null) {
-            return;
-        }
-        buttVPlus.setEnabled(enable);
-        buttVMinus.setEnabled(enable);
-        buttVPlus.setBackgroundDrawable(getResources().getDrawable(enable ? R.drawable.vol_plus : R.drawable.green_vol_plus));
-        buttVMinus.setBackgroundDrawable(getResources().getDrawable(enable ? R.drawable.vol_minus : R.drawable.green_vol_minus));
-    }
     View.OnClickListener onButtPrev = new OnClickListener() {
 
         public void onClick(View v) {
-            if (samsung) {
-                try {
-                    if (srv == null) {
-                        errExit(R.string.strErrSrvZero);
-                    }
-                    srv.set_driver_mode(prefs.driver_mode);
-                    srv.play_prev();
-                } catch (RemoteException e) {
-                    log_err("exception in prev button handler");
-                }
-            } else {
-                new SendSrvCmd().execute(SendSrvCmd.cmd_prev);
-            }
+            new SendSrvCmd().execute(SendSrvCmd.cmd_prev);
         }
     };
     View.OnClickListener onButtNext = new OnClickListener() {
 
         public void onClick(View v) {
-            if (samsung) {
-                try {
-                    if (srv == null) {
-                        errExit(R.string.strErrSrvZero);
-                    }
-                    srv.set_driver_mode(prefs.driver_mode);
-                    srv.play_next();
-                } catch (RemoteException e) {
-                    log_err("exception in next button handler");
-                }
-            } else {
-                new SendSrvCmd().execute(SendSrvCmd.cmd_next);
-            }
-        }
-    };
-    View.OnClickListener onButtVPlus = new OnClickListener() {
-
-        public void onClick(View v) {
-            v.startAnimation(AnimationUtils.loadAnimation(getApplicationContext(), R.anim.blink));
-            if (samsung) {
-                try {
-                    if (srv == null) {
-                        errExit(R.string.strErrSrvZero);
-                    }
-                    srv.inc_vol();
-                } catch (RemoteException e) {
-                    log_err("exception in plus button handler");
-                }
-
-            } else {
-                new SendSrvCmd().execute(SendSrvCmd.cmd_vol_up);
-            }
-        }
-    };
-    View.OnClickListener onButtVMinus = new OnClickListener() {
-
-        public void onClick(View v) {
-            v.startAnimation(AnimationUtils.loadAnimation(getApplicationContext(), R.anim.blink));
-            if (samsung) {
-                try {
-                    if (srv == null) {
-                        errExit(R.string.strErrSrvZero);
-                    }
-                    srv.dec_vol();
-                } catch (RemoteException e) {
-                    log_err("exception in minus button handler");
-                }
-            } else {
-                new SendSrvCmd().execute(SendSrvCmd.cmd_vol_down);
-            }
-        }
-    };
-    View.OnClickListener onButtonVolume = new OnClickListener() {
-
-        public void onClick(View v) {
-            showDialog(VOLUME_DLG);
+            new SendSrvCmd().execute(SendSrvCmd.cmd_next);
         }
     };
 
     private void ExitFromProgram() {
         try {
             if (srv != null) {
-                if (srv.is_running()) {
+                if (srv.isRunning()) {
                     saveBook();
                 }
                 srv.shutdown();
@@ -525,10 +364,10 @@ public class Predatoid extends Activity implements Comparator<File> {
 //            File path = cur_album_id.getParentFile();
 //            if (path != null) {
 //                int k = cur_album_id.toString().lastIndexOf('/');
-//                String last_path = cur_album_id.toString().substring(k + 1);
+//                String lastPath = cur_album_id.toString().substring(k + 1);
 //                if (setAdapter(path)) {
 //                    for (k = 0; k < albumEntries.size(); k++) {
-//                        if (albumEntries.get(k).getTopText().compareTo(last_path) == 0) {
+//                        if (albumEntries.get(k).getTopText().compareTo(lastPath) == 0) {
 //                            break;
 //                        }
 //                    }
@@ -554,10 +393,10 @@ public class Predatoid extends Activity implements Comparator<File> {
 
         public void onStopTrackingTouch(SeekBar seekBar) {
             try {
-                if (srv.get_cur_mode() == 0) {
-                    srv.seek_to(seekBar.getProgress() * 1000);
+                if (srv.getCurrentMode() == 0) {
+                    srv.seekTo(seekBar.getProgress() * 1000);
                 } else {
-                    srv.play(srv.get_cur_pos(), seekBar.getProgress());
+                    srv.play(srv.getCurrentPosition(), seekBar.getProgress());
                 }
             } catch (Exception e) {
                 // TODO Auto-generated catch block
@@ -573,10 +412,10 @@ public class Predatoid extends Activity implements Comparator<File> {
 //        File path = cur_album_id.getParentFile();
 //        if (path != null) {
 //            int k = cur_album_id.toString().lastIndexOf('/');
-//            String last_path = cur_album_id.toString().substring(k + 1);
+//            String lastPath = cur_album_id.toString().substring(k + 1);
 //            if (setAdapter(path)) {
 //                for (k = 0; k < albumEntries.size(); k++) {
-//                    if (albumEntries.get(k).getTopText().compareTo(last_path) == 0) {
+//                    if (albumEntries.get(k).getTopText().compareTo(lastPath) == 0) {
 //                        break;
 //                    }
 //                }
@@ -591,7 +430,7 @@ public class Predatoid extends Activity implements Comparator<File> {
     private boolean playContents(String fpath, ArrayList<String> audioFiles, ArrayList<String> songs,
             int trackNum, int startPos) {
         try {
-            if (!srv.init_playlist(fpath, audioFiles.size())) {
+            if (!srv.initPlaylist(fpath, audioFiles.size())) {
                 log_err("failed to initialize new playlist on server");
                 Toast.makeText(getApplicationContext(), R.string.strSrvFail, Toast.LENGTH_SHORT).show();
                 return false;
@@ -603,7 +442,7 @@ public class Predatoid extends Activity implements Comparator<File> {
                     return false;
                 }
             }
-            srv.set_driver_mode(prefs.driver_mode);
+            srv.setLoopPlaying(prefs.loopMode);
             if (!srv.play(trackNum, startPos)) {
                 Toast.makeText(getApplicationContext(), R.string.strSrvFail, Toast.LENGTH_SHORT).show();
                 log_err("failed to start playing <contents>");
@@ -627,20 +466,17 @@ public class Predatoid extends Activity implements Comparator<File> {
         try {
             int i;
             File book_file;
-            String s = srv.get_cur_dir();
+            String s = srv.getCurrentDirectory();
 
-            if (hasPlistExt(s) || hasCueExt(s)) {
-                i = s.lastIndexOf('/');
-                book_file = new File(s.substring(0, i) + resume_bmark);
-            } else {
-                book_file = new File(s + resume_bmark);
-                s = srv.get_cur_track_source();
-            }
-            prefs.last_played_file = new String(s);
-            int seconds = srv.get_cur_seconds() - srv.get_cur_track_start();
-            int index = srv.get_cur_pos();
-            prefs.last_played_pos = index;
-            prefs.last_played_time = seconds;
+
+            book_file = new File(s + resume_bmark);
+            s = srv.getCurrentTrackSource();
+
+            prefs.lastPlayedFile = new String(s);
+            int seconds = srv.getCurrentSeconds() - srv.getCurrentTrackStart();
+            int index = srv.getCurrentPosition();
+            prefs.lastPlayedPosition = index;
+            prefs.lastPlayedTime = seconds;
             if (!prefs.savebooks) {
                 return;
             }
@@ -664,38 +500,28 @@ public class Predatoid extends Activity implements Comparator<File> {
 
             IconifiedText iconifiedText = (IconifiedText) a.getAdapter().getItem(i);
 
-            currDisplayedAlbumID = iconifiedText.getAlbumID();
-            setAdapter();
 
-            if (readyToPlay) {
-                if (iconifiedText.hasChildren()) {
-                    try {
-                        if (!srv.is_running()) {
-                            playContents(startfile, filesToPlay, songNames, 0, i);
-                            currentTrack = 0;
-                            currPlayingAlbumID = iconifiedText.getAlbumID();
-                        }
-                    } catch (RemoteException ex) {
-                        Logger.getLogger(Predatoid.class.getName()).log(Level.SEVERE, null, ex);
+            if (iconifiedText.hasChildren()) {
+                currDisplayedAlbumID = iconifiedText.getAlbumID();
+                setAdapterFromAlbum();
+                try {
+                    if (!srv.isRunning()) {
+                        playContents(startfile, filesToPlay, songNames, 0, i);
+                        currentTrack = 0;
+                        currPlayingAlbumID = iconifiedText.getAlbumID();
                     }
-                    canGoBack = true;
-                } else {
-                    playContents(startfile, filesToPlay, songNames, i, i);
-                    currentTrack = i;
-                    currPlayingAlbumID = iconifiedText.getAlbumID();
+                } catch (RemoteException ex) {
+                    Logger.getLogger(Predatoid.class.getName()).log(Level.SEVERE, null, ex);
                 }
+                canGoBack = true;
+            } else {
+                playContents(startfile, filesToPlay, songNames, i, i);
+                currentTrack = i;
+                currPlayingAlbumID = iconifiedText.getAlbumID();
             }
+
             new SendSrvCmd().execute(SendSrvCmd.cmd_hilight_item);
             pauseOnStart = false;
-//            if (i == 0 && a != null) {
-//                onButtUp();
-//                return;
-//            }
-//            k = k - 1;
-//            if ((int) k >= files.size() && a != null) {
-//                log_err("clicked item out of range! i: " + i + " k: " + k);
-//                return;
-//            }
 
         }
     };
@@ -720,26 +546,7 @@ public class Predatoid extends Activity implements Comparator<File> {
                 log_err("non-existing item long-pressed in the list!");
                 return false;
             }
-            if (hasPlistExt(f) || hasCueExt(f)) {
-                if (!playPath(f)) {
-                    log_err("error handling long press for " + f.toString());
-                    return false;
-                }
-                return true;
-            }
-//            if (hasPlistExt(cur_album_id)) {	// edit playlist
-//                if (prefs.shuffle) {
-//                    Toast.makeText(getApplicationContext(), R.string.strTurnOffShuffle, Toast.LENGTH_SHORT).show();
-//                    return false;
-//                }
-//                track_longpressed = i; // set which position clicked
-//                showDialog(EDIT_PLAYLIST_DLG);
-//                return true;
-//            }
-            if (f.isDirectory() || hasAudioExt(f)) {	// add to playlist
-                showDialog(ADD_PLAYLIST_DLG);
-                return true;
-            }
+
             log_err("unknown item long-pressed!");
             return false;
         }
@@ -775,14 +582,14 @@ public class Predatoid extends Activity implements Comparator<File> {
                             }
                             if (!pBar.isPressed()) {
                                 try {
-                                    if (!srv.is_running() || srv.is_paused()) {
+                                    if (!srv.isRunning() || srv.isPaused()) {
                                         return;
                                     }
                                     if (need_update) {		// track_time was unknown at init time
-                                        //	int track_time = PredatoidSrv.curTrackLen;
-                                        int track_time = srv.get_cur_track_len();
+                                        //	int track_time = PredatoidSrv.currentTrackLength;
+                                        int track_time = srv.getCurrentTrackLength();
                                         if (track_time <= 0) {
-                                            track_time = srv.get_track_duration();
+                                            track_time = srv.getTrackDuration();
                                             if (track_time <= 0) {
                                                 return;
                                             }
@@ -796,12 +603,12 @@ public class Predatoid extends Activity implements Comparator<File> {
                                         allTime.setText(sTime);
                                         need_update = false;
                                     }
-                                    //	pBar.setProgress(srv.get_cur_seconds() - PredatoidSrv.curTrackStart);
-                                    int progress = srv.get_cur_seconds() - srv.get_cur_track_start();
+                                    //	pBar.setProgress(srv.getCurrentSeconds() - PredatoidSrv.currentTrackStart);
+                                    int progress = srv.getCurrentSeconds() - srv.getCurrentTrackStart();
                                     if (progress > 0) {
                                         pBar.setProgress(progress);
                                     }
-                                    String sTime = (srv.get_cur_seconds() < 3600) ? String.format("%d:%02d", progress / 60, progress % 60)
+                                    String sTime = (srv.getCurrentSeconds() < 3600) ? String.format("%d:%02d", progress / 60, progress % 60)
                                             : String.format("%d:%02d:%02d", progress / 3600, (progress % 3600) / 60, progress % 60);
                                     nowTime.setText(sTime);
                                 } catch (Exception e) {
@@ -820,12 +627,12 @@ public class Predatoid extends Activity implements Comparator<File> {
                         }
                         if (!pBar.isPressed()) {
                             try {
-                                //	int track_time = PredatoidSrv.curTrackLen;
-                                int track_time = srv.get_cur_track_len();
+                                //	int track_time = PredatoidSrv.currentTrackLength;
+                                int track_time = srv.getCurrentTrackLength();
                                 need_update = false;
                                 if (track_time <= 0) {
                                     log_msg("progressUpdate(): fishy track_time " + track_time);
-                                    track_time = srv.get_track_duration();
+                                    track_time = srv.getTrackDuration();
                                     if (track_time <= 0) {
                                         need_update = true;
                                     }
@@ -888,12 +695,8 @@ public class Predatoid extends Activity implements Comparator<File> {
                 boolean error = bb.getBoolean("error");
                 if (!error) {
                     // normal track, need to setup track time/progress update stuff
-                    // if(pBar != null) pBar.setProgress(0);
-                    if (!samsung) {
-                        ttu.start(curfile);
-                    } else {
-                        getWindow().setTitle(curfile);
-                    }
+
+                    ttu.start(curfile);
                     if (buttPause != null) {
                         buttPause.setBackgroundDrawable(getResources().getDrawable(R.drawable.s_pause));
                     }
@@ -901,18 +704,15 @@ public class Predatoid extends Activity implements Comparator<File> {
                 } else {
                     //	  if(pBar != null) pBar.setProgress(0);
                     getWindow().setTitle(curfile);
-                    if (!samsung) {
-                        ttu.shutdown();
-                    }
+                    ttu.shutdown();
                     if (buttPause != null) {
                         buttPause.setBackgroundDrawable(getResources().getDrawable(R.drawable.s_play));
                     }
                     return;
                 }
             }
-            if (!samsung) {
-                ttu.shutdown();
-            }
+            ttu.shutdown();
+
             // if(pBar != null) pBar.setProgress(0);
             curfile = bb.getString("errormsg");
             if (curfile == null) {
@@ -923,7 +723,7 @@ public class Predatoid extends Activity implements Comparator<File> {
     };
     Handler pauseResumeHandler = new Handler() {
 
-        private String now_playing = null;
+        private String nowPlaying = null;
 
         @Override
         public void handleMessage(Message msg) {
@@ -931,12 +731,12 @@ public class Predatoid extends Activity implements Comparator<File> {
             switch (msg.what) {
                 case 0:
                     buttPause.setBackgroundDrawable(getResources().getDrawable(R.drawable.s_pause));
-                    if (now_playing != null) {
-                        getWindow().setTitle(now_playing);
+                    if (nowPlaying != null) {
+                        getWindow().setTitle(nowPlaying);
                     }
                     break;
                 case 1:
-                    now_playing = curWindowTitle;
+                    nowPlaying = curWindowTitle;
                     buttPause.setBackgroundDrawable(getResources().getDrawable(R.drawable.s_play));
                     getWindow().setTitle(getString(R.string.strPaused));
                     break;
@@ -952,39 +752,38 @@ public class Predatoid extends Activity implements Comparator<File> {
 
         // getting settings
         SharedPreferences settings = PreferenceManager.getDefaultSharedPreferences(getBaseContext());
-        boolean s_m = settings.getBoolean("shuffle_mode", false);
-        boolean d_m = settings.getBoolean("driver_mode", false);
-        boolean b_m = settings.getBoolean("book_mode", false);
-        boolean l_t_p = settings.getBoolean("login_to_predatum", false);
-        String l_u = settings.getString("login_username", null);
-        String l_p = settings.getString("login_password", null);
-        if (d_m) {
-            prefs.driver_mode = PredatoidSrv.MODE_DIRECT;
-            ButtonVolume.setVisibility(View.VISIBLE);
-        } else {
-            prefs.driver_mode = PredatoidSrv.MODE_CALLBACK;
-            ButtonVolume.setVisibility(View.GONE);
-        }
-        if (b_m) {
+        boolean shuffleMode = settings.getBoolean("shuffle_mode", false);
+        boolean loopMode = settings.getBoolean("loop_mode", false);
+        boolean bookMode = settings.getBoolean("book_mode", false);
+        boolean loginToPredatum = settings.getBoolean("login_to_predatum", false);
+        String loginUsername = settings.getString("login_username", null);
+        String loginPassword = settings.getString("login_password", null);
+
+        if (bookMode) {
             prefs.savebooks = true;
         } else {
             prefs.savebooks = false;
         }
-        if (l_t_p) {
+        if (loginToPredatum) {
             prefs.loginToPredatum = true;
         } else {
             prefs.loginToPredatum = false;
         }
-        if (s_m != prefs.shuffle) {
+        if (shuffleMode != prefs.shuffle) {
             playlistChanged = true;
         }
-        if (s_m) {
+        if (shuffleMode) {
             prefs.shuffle = true;
         } else {
             prefs.shuffle = false;
         }
-        prefs.loginUserName = l_u;
-        prefs.loginPassword = l_p;
+        if (loopMode) {
+            prefs.loopMode = true;
+        } else {
+            prefs.loopMode = false;
+        }
+        prefs.loginUserName = loginUsername;
+        prefs.loginPassword = loginPassword;
 
         update_headset_mode(settings);
     }
@@ -1007,16 +806,16 @@ public class Predatoid extends Activity implements Comparator<File> {
         if (settings == null) {
             settings = PreferenceManager.getDefaultSharedPreferences(getBaseContext());
         }
-        prefs.headset_mode = 0;
+        prefs.headsetMode = 0;
         if (settings.getBoolean("hs_remove_mode", false)) {
-            prefs.headset_mode |= PredatoidSrv.HANDLE_HEADSET_REMOVE;
+            prefs.headsetMode |= PredatoidSrv.HANDLE_HEADSET_REMOVE;
         }
         if (settings.getBoolean("hs_insert_mode", false)) {
-            prefs.headset_mode |= PredatoidSrv.HANDLE_HEADSET_INSERT;
+            prefs.headsetMode |= PredatoidSrv.HANDLE_HEADSET_INSERT;
         }
         if (srv != null) {
             try {
-                srv.set_headset_mode(prefs.headset_mode);
+                srv.setHeadsetMode(prefs.headsetMode);
             } catch (RemoteException r) {
                 log_err("remote exception while trying to set headset_mode");
             }
@@ -1079,9 +878,6 @@ public class Predatoid extends Activity implements Comparator<File> {
         } else {
             log_msg("service bound");
         }
-        if ((new Build()).DEVICE.compareTo("GT-I5700") == 0 && (new Build.VERSION()).SDK.compareTo("7") == 0) {
-            samsung = true;
-        }
 
     }
 
@@ -1113,41 +909,41 @@ public class Predatoid extends Activity implements Comparator<File> {
     class Prefs {
 
         public static final String PREFS_NAME = "predatoid_prefs";
-        public String last_path;
-        public String plist_path;
-        public String plist_name;
-        public String last_played_file;
+        public String lastPath;
+        public String plistPath;
+        public String plistName;
+        public String lastPlayedFile;
         public String loginUserName;
         public String loginPassword;
         public boolean shuffle;
+        public boolean loopMode;
         public boolean savebooks;
         public boolean loginToPredatum;
-        public int driver_mode;
-        public int headset_mode;
-        public int last_played_pos;
-        public int last_played_time;
+        public int headsetMode;
+        public int lastPlayedPosition;
+        public int lastPlayedTime;
 
         public void load() {
             SharedPreferences shpr = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
             shuffle = shpr.getBoolean("shuffle", false);
             savebooks = shpr.getBoolean("save_books", false);
             loginToPredatum = shpr.getBoolean("login_to_predatum", false);
-            driver_mode = shpr.getInt("driver_mode", PredatoidSrv.MODE_CALLBACK);
-            last_path = shpr.getString("last_path", null);
-            last_played_file = shpr.getString("last_played_file", null);
-            last_played_pos = shpr.getInt("last_played_pos", 0);
-            last_played_time = shpr.getInt("last_played_time", 0);
-            plist_path = shpr.getString("plist_path", Environment.getExternalStorageDirectory().toString());
-            plist_name = shpr.getString("plist_name", "Favorites");
+            loopMode = shpr.getBoolean("loop_mode", false);
+            lastPath = shpr.getString("last_path", null);
+            lastPlayedFile = shpr.getString("last_played_file", null);
+            lastPlayedPosition = shpr.getInt("last_played_pos", 0);
+            lastPlayedTime = shpr.getInt("last_played_time", 0);
+            plistPath = shpr.getString("plist_path", Environment.getExternalStorageDirectory().toString());
+            plistName = shpr.getString("plist_name", "Favorites");
             loginUserName = shpr.getString("login_username", null);
             loginPassword = shpr.getString("login_password", null);
 
-            headset_mode = 0;
+            headsetMode = 0;
             if (shpr.getBoolean("hs_remove_mode", false)) {
-                headset_mode |= PredatoidSrv.HANDLE_HEADSET_REMOVE;
+                headsetMode |= PredatoidSrv.HANDLE_HEADSET_REMOVE;
             }
             if (shpr.getBoolean("hs_insert_mode", false)) {
-                headset_mode |= PredatoidSrv.HANDLE_HEADSET_INSERT;
+                headsetMode |= PredatoidSrv.HANDLE_HEADSET_INSERT;
             }
         }
 
@@ -1156,25 +952,25 @@ public class Predatoid extends Activity implements Comparator<File> {
             SharedPreferences.Editor editor = shpr.edit();
             editor.putBoolean("shuffle", shuffle);
             editor.putBoolean("save_books", savebooks);
-            editor.putInt("driver_mode", driver_mode);
-            editor.putBoolean("hs_remove_mode", (headset_mode & PredatoidSrv.HANDLE_HEADSET_REMOVE) != 0);
-            editor.putBoolean("hs_insert_mode", (headset_mode & PredatoidSrv.HANDLE_HEADSET_INSERT) != 0);
+            editor.putBoolean("loop_mode", loopMode);
+            editor.putBoolean("hs_remove_mode", (headsetMode & PredatoidSrv.HANDLE_HEADSET_REMOVE) != 0);
+            editor.putBoolean("hs_insert_mode", (headsetMode & PredatoidSrv.HANDLE_HEADSET_INSERT) != 0);
             editor.putBoolean("login_to_predatum", loginToPredatum);
             editor.putString("login_username", loginUserName);
             editor.putString("login_password", loginPassword);
             if (currDisplayedAlbumID != 0) {
-//                editor.putString("last_path", cur_album_id.toString());
+//                editor.putString("lastPath", cur_album_id.toString());
             }
-            if (plist_path != null) {
-                editor.putString("plist_path", plist_path);
+            if (plistPath != null) {
+                editor.putString("plist_path", plistPath);
             }
-            if (plist_name != null) {
-                editor.putString("plist_name", plist_name);
+            if (plistName != null) {
+                editor.putString("plist_name", plistName);
             }
-            if (last_played_file != null) {
-                editor.putString("last_played_file", last_played_file);
-                editor.putInt("last_played_pos", last_played_pos);
-                editor.putInt("last_played_time", last_played_time);
+            if (lastPlayedFile != null) {
+                editor.putString("last_played_file", lastPlayedFile);
+                editor.putInt("last_played_pos", lastPlayedPosition);
+                editor.putInt("last_played_time", lastPlayedTime);
             }
             if (!editor.commit()) {
                 showMsg(getString(R.string.strErrPrefs));
@@ -1212,316 +1008,15 @@ public class Predatoid extends Activity implements Comparator<File> {
         buttNext.setOnClickListener(onButtNext);
         fileList.setOnItemClickListener(selItem);
         fileList.setOnItemLongClickListener(pressItem);
-        ButtonVolume.setOnClickListener(onButtonVolume);
-        enableVolumeButtons(prefs.driver_mode == PredatoidSrv.MODE_DIRECT);
+
         try {
-            if (srv != null && srv.is_running()) //pBar.setMax(PredatoidSrv.curTrackLen);
+            if (srv != null && srv.isRunning()) //pBar.setMax(PredatoidSrv.currentTrackLength);
             {
-                pBar.setMax(srv.get_cur_track_len());
+                pBar.setMax(srv.getCurrentTrackLength());
             }
         } catch (RemoteException e) {
             log_err("remote exception in setContent()");
         }
-    }
-    static final int SETTINGS_DLG = 0;
-    static final int ADD_PLAYLIST_DLG = 1;
-    static final int EDIT_PLAYLIST_DLG = 2;
-    static final int VOLUME_DLG = 3;
-    private boolean item_deleted = false;
-    private int track_longpressed;
-    private String curRowIs;
-    private String itemDeleted;
-    private Dialog thisDialog;
-    private CheckBox chb, chbp;
-
-    protected void onPrepareDialog(int id, Dialog dialog) {
-        switch (id) {
-            case EDIT_PLAYLIST_DLG:
-                item_deleted = false;
-                track_longpressed = cur_longpressed;
-//       				tvRow.setTopText(curRowIs + " " + (cur_longpressed + 1));
-                curRowIs = getString(R.string.strCurRow);
-                itemDeleted = getString(R.string.strDeleted);
-                thisDialog = dialog;
-                thisDialog.setTitle(curRowIs + " " + (track_longpressed + 1));
-                break;
-            case ADD_PLAYLIST_DLG:
-                AlertDialog aDialog = (AlertDialog) dialog;
-                aDialog.setTitle(getString(R.string.strAddPlist));
-                ((EditText) aDialog.findViewById(R.id.EditPlaylistPath)).setText(prefs.plist_path);
-                ((EditText) aDialog.findViewById(R.id.EditPlaylistName)).setText(prefs.plist_name);
-                TextView chbt = (TextView) aDialog.findViewById(R.id.CheckBoxText);
-                chbt.setEnabled(false);
-                chb = (CheckBox) aDialog.findViewById(R.id.CheckRecursive);
-                chbp = (CheckBox) aDialog.findViewById(R.id.CheckPlayAfter);
-                chb.setChecked(false);
-                chbp.setChecked(false);
-                chb.setEnabled(false);
-                chbt.setEnabled(false);
-                if (files == null || files.size() == 0 || files.size() >= cur_longpressed) {
-                    break;
-                }
-                File f = new File(files.get(cur_longpressed));
-                if (f.isDirectory()) {
-                    chb.setEnabled(true);
-                    chbt.setEnabled(true);
-                }
-                break;
-            case VOLUME_DLG:
-                buttVMinus = (Button) dialog.findViewById(R.id.ButtonVMinus);
-                buttVPlus = (Button) dialog.findViewById(R.id.ButtonVPlus);
-                buttVMinus.setOnClickListener(onButtVMinus);
-                buttVPlus.setOnClickListener(onButtVPlus);
-                break;
-            default:
-                break;
-        }
-    }
-
-    protected Dialog onCreateDialog(int id) {
-        Dialog dialog;
-        LayoutInflater factory = LayoutInflater.from(this);
-        switch (id) {
-
-            case ADD_PLAYLIST_DLG:
-                final View newView = factory.inflate(R.layout.add_plist, null);
-                AlertDialog.Builder add_playlist_dlg = new AlertDialog.Builder(this);
-                add_playlist_dlg.setView(newView);
-                add_playlist_dlg.setTitle(R.string.strAddPlist);
-                add_playlist_dlg.setPositiveButton(R.string.strAdd, new DialogInterface.OnClickListener() {
-
-                    public void onClick(DialogInterface dialog, int whichButton) {
-                        Log.i("predatoid", "-1");
-                        // save and reload playlist
-                        String path = ((EditText) newView.findViewById(R.id.EditPlaylistPath)).getText().toString();
-                        String name = ((EditText) newView.findViewById(R.id.EditPlaylistName)).getText().toString();
-                        Log.i("predatoid", "0");
-                        String spath = new String(path);
-                        String sname = new String(name);
-                        boolean playafter = chbp.isChecked();
-                        if (!name.endsWith(plist_ext)) {
-                            name += plist_ext;
-                        }
-                        if (!path.endsWith("/")) {
-                            path += "/";
-                        }
-                        path = path + name;
-                        File plist_file = new File(path);
-                        File f = new File(files.get(cur_longpressed));
-                        if (!f.exists()) {
-                            Toast.makeText(getApplicationContext(), R.string.strInternalError, Toast.LENGTH_SHORT).show();
-                            return;
-                        }
-                        ArrayList<String> filez = new ArrayList<String>();
-                        if (f.isDirectory()) {
-                            if (chb.isChecked()) {
-                                filez = recurseDir(f);
-                                if (filez == null || filez.size() < 1) {
-                                    Toast.makeText(getApplicationContext(), R.string.strNoFiles, Toast.LENGTH_SHORT).show();
-                                    return;
-                                }
-                            } else {
-                                parsed_dir d = parseDir(f);
-                                if (d == null || d.flacs == 0) {
-                                    Toast.makeText(getApplicationContext(), R.string.strNoFiles, Toast.LENGTH_SHORT).show();
-                                    return;
-                                }
-                                for (int i = d.dirs + d.cues; i < d.filez.length; i++) {
-                                    filez.add(d.filez[i].toString());
-                                }
-                            }
-                        } else {
-                            filez.add(files.get(cur_longpressed).toString());
-                        }
-                        Log.i("predatoid", "1");
-                        String cstats = new String("createNewFile()");
-                        int i;
-                        try {
-                            boolean append = true;
-                            if (!plist_file.exists()) {
-                                plist_file.createNewFile();
-                                append = false;
-                            }
-                            cstats = new String("FileWiter()");
-                            FileWriter fw = new FileWriter(plist_file, append);
-                            cstats = new String("BufferedWriter()");
-                            BufferedWriter writer = new BufferedWriter(fw, 8192);
-                            cstats = new String("write()");
-                            for (i = 0; i < filez.size(); i++) {
-                                writer.write(filez.get(i) + "\n");
-                            }
-                            cstats = new String("close()");
-                            writer.close();
-                            prefs.plist_path = new String(spath);
-                            prefs.plist_name = new String(sname);
-                        } catch (Exception e) {
-                            //Toast.makeText(getApplicationContext(), R.string.strIOError, Toast.LENGTH_SHORT).show();
-                            showMsg(getString(R.string.strIOError) + " in " + cstats + " while saving playlist to " + plist_file.toString());
-                            return;
-                        }
-                        Log.i("predatoid", "2");
-                        dismissDialog(ADD_PLAYLIST_DLG);
-                        Log.i("predatoid", "3");
-                        thisDialog = null;
-                        if (playafter) {
-                            playPath(plist_file);
-                        }
-                    }
-                });
-                add_playlist_dlg.setNegativeButton(R.string.strCancel, new DialogInterface.OnClickListener() {
-
-                    public void onClick(DialogInterface dialog, int whichButton) {
-                        dismissDialog(ADD_PLAYLIST_DLG);
-                        thisDialog = null;
-                    }
-                });
-                return add_playlist_dlg.create();
-
-            case EDIT_PLAYLIST_DLG:
-
-                dialog = new Dialog(this);
-                dialog.setContentView(R.layout.edit_plist);
-
-                // Move to bottom
-                ((Button) dialog.findViewById(R.id.ButtonBottom)).setOnClickListener(new OnClickListener() {
-
-                    public void onClick(View v) {
-                        if (item_deleted) {
-                            return;
-                        }
-                        track_longpressed = files.size() - 1;
-                        thisDialog.setTitle(curRowIs + " " + (track_longpressed + 1));
-                    }
-                });
-
-                // Move down
-                ((Button) dialog.findViewById(R.id.ButtonDown)).setOnClickListener(new OnClickListener() {
-
-                    public void onClick(View v) {
-                        if (item_deleted) {
-                            return;
-                        }
-                        if (track_longpressed + 1 < files.size()) {
-                            track_longpressed++;
-                        }
-                        thisDialog.setTitle(curRowIs + " " + (track_longpressed + 1));
-                    }
-                });
-
-                // Move up
-                ((Button) dialog.findViewById(R.id.ButtonUp)).setOnClickListener(new OnClickListener() {
-
-                    public void onClick(View v) {
-                        if (item_deleted) {
-                            return;
-                        }
-                        if (track_longpressed > 0) {
-                            track_longpressed--;
-                        }
-                        thisDialog.setTitle(curRowIs + " " + (track_longpressed + 1));
-                    }
-                });
-
-                // Move to top
-                ((Button) dialog.findViewById(R.id.ButtonTop)).setOnClickListener(new OnClickListener() {
-
-                    public void onClick(View v) {
-                        if (item_deleted) {
-                            return;
-                        }
-                        track_longpressed = 0;
-                        thisDialog.setTitle(curRowIs + " 1");
-                    }
-                });
-
-                // Save
-                ((Button) dialog.findViewById(R.id.ButtonSave)).setOnClickListener(new OnClickListener() {
-
-                    public void onClick(View v) {
-                        // save and reload playlist
-                        if (cur_longpressed == track_longpressed && !item_deleted) {
-                            Toast.makeText(getApplicationContext(), R.string.strNoChg, Toast.LENGTH_SHORT).show();
-                        } else {
-                            File cpath;
-//                            if (cur_album_id.toString().endsWith(plist_ext)) {
-//                                cpath = cur_album_id;
-//                            } else {
-//                                cpath = new File(cur_album_id.toString() + plist_ext);
-//                            }
-//                            if (cpath.exists()) {
-//                                if (!cpath.delete()) {
-//                                    Toast.makeText(getApplicationContext(), R.string.strCantRemovePlist, Toast.LENGTH_SHORT).show();
-//                                    return;
-//                                }
-//                            }
-                            if (item_deleted) {
-                                files.remove(cur_longpressed);
-                            } else {
-                                String moved = files.get(cur_longpressed);
-                                files.remove(cur_longpressed);
-                                files.add(track_longpressed, moved);
-                            }
-                            try {
-//                                BufferedWriter writer = new BufferedWriter(new FileWriter(cpath), 8192);
-//                                for (int i = 0; i < files.size(); i++) {
-//                                    writer.write(files.get(i) + "\n");
-//                                }
-//                                writer.close();
-                            } catch (Exception e) {
-                                log_err("Exception while saving tracklist: " + e.toString());
-                            }
-
-                            setAdapterFromAlbum();
-                            if (item_deleted) {
-                                fileList.setSelection(cur_longpressed >= files.size() ? files.size() - 1 : cur_longpressed);
-                            } else {
-                                fileList.setSelection(cur_longpressed);
-                            }
-                            playlistChanged = true;
-                            dismissDialog(EDIT_PLAYLIST_DLG);
-                            thisDialog = null;
-                        }
-                    }
-                });
-
-                // Cancel
-                ((Button) dialog.findViewById(R.id.ButtonCancel)).setOnClickListener(new OnClickListener() {
-
-                    public void onClick(View v) {
-                        dismissDialog(EDIT_PLAYLIST_DLG);
-                        thisDialog = null;
-                    }
-                });
-
-                // Delete
-                ((Button) dialog.findViewById(R.id.ButtonDelete)).setOnClickListener(new OnClickListener() {
-
-                    public void onClick(View v) {
-                        item_deleted = true;
-                        thisDialog.setTitle(itemDeleted);
-                    }
-                });
-                // tvRow = (TextView) dialog.findViewById(R.id.TextRow);
-                return dialog;
-            /*case EDIT_PLAYLIST_DLG:
-            AlertDialog.Builder submenu = new AlertDialog.Builder(this);
-            submenu.setTitle("Actions");
-            submenu.setItems(new String[] {getString(R.string.strMoveToTop), getString(R.string.strMoveToBottom), getString(R.string.strUp), getString(R.string.strDown), getString(R.string.strDelete), getString(R.string.strSave), getString(R.string.strCancel)}, new DialogInterface.OnClickListener() {
-            public void onClick(DialogInterface dialog, int which) {
-
-            }
-            });
-            return submenu.create();*/
-            case VOLUME_DLG:
-                View VolumeView = factory.inflate(R.layout.volume, null);
-                dialog = new Dialog(this, R.style.Theme_VolumeDialog);
-                dialog.setContentView(VolumeView);
-                dialog.setCanceledOnTouchOutside(true);
-                return dialog;
-            default:
-                return null;
-        }
-
     }
 
     @Override
@@ -1566,96 +1061,6 @@ public class Predatoid extends Activity implements Comparator<File> {
     public void errExit(int resource) {
         errExit(getString(resource));
     }
-    ////////////////////////////////////////////////////////////////////
-    ////////////////// Directory/playlist/cue handlers /////////////////
-    ////////////////////////////////////////////////////////////////////
-    public static final String plist_ext = ".playlist";
-    public static final String bmark_ext = ".bmark";
-    // Mp3support
-    public static final String[] audioExts = {".flac", ".FLAC", ".ape", ".APE", ".wv", ".WV", ".mpc", ".MPC", "m4a", "M4A",
-        ".wav", ".WAV", ".mp3", ".MP3", ".wma", ".WMA", ".ogg", ".OGG", ".3gpp", ".3GPP", ".aac", ".AAC"};
-    public static final String[] plistExts = {plist_ext, ".m3u", ".M3U", ".pls", ".PLS"};
-
-    public static boolean hasAudioExt(String s) {
-        for (int i = 0; i < audioExts.length; i++) {
-            if (s.endsWith(audioExts[i])) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    public static boolean hasPlistExt(String s) {
-        for (int i = 0; i < plistExts.length; i++) {
-            if (s.endsWith(plistExts[i])) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    public static boolean hasCueExt(String s) {
-        return s.endsWith(".cue") || s.endsWith(".CUE");
-    }
-
-    public static boolean hasAudioExt(File f) {
-        return hasAudioExt(f.toString());
-    }
-
-    public static boolean hasPlistExt(File f) {
-        return hasPlistExt(f.toString());
-    }
-
-    public static boolean hasCueExt(File f) {
-        return hasCueExt(f.toString());
-    }
-
-    public static int filetype(File f) {
-        String s = f.toString();
-        if (f.isDirectory()) {
-            return 0;
-        } else if (f.toString().endsWith(bmark_ext)) {
-            return 1;
-        } else if (hasCueExt(f)) {
-            return 2;
-        } else if (hasPlistExt(f)) {
-            return 3;
-        } else if (s.endsWith(".flac") || s.endsWith(".FLAC")) {
-            return 5;	// not using hasAudioExt to
-        } else if (s.endsWith(".ape") || s.endsWith(".APE")) {
-            return 4;	// provide for different icons
-        } else if (s.endsWith(".wav") || s.endsWith(".WAV")) {
-            return 7;
-        } else if (s.endsWith(".wv") || s.endsWith(".WV")) {
-            return 8;
-        } else if (s.endsWith(".mpc") || s.endsWith(".MPC")) {
-            return 6;
-        } else if (s.endsWith(".m4a") || s.endsWith(".M4A")) {
-            return 9;
-        } // Mp3support
-        else if (s.endsWith(".mp3") || s.endsWith(".MP3")) {
-            return 10;
-        } else if (s.endsWith(".wma") || s.endsWith(".WMA")) {
-            return 10;
-        } else if (s.endsWith(".ogg") || s.endsWith(".OGG")) {
-            return 10;
-        } else if (s.endsWith(".3gpp") || s.endsWith(".3GPP")) {
-            return 10;
-        } else if (s.endsWith(".aac") || s.endsWith(".AAC")) {
-            return 10;
-        }
-
-        return 666;
-    }
-
-    public int compare(File f1, File f2) {
-        int type1 = filetype(f1), type2 = filetype(f2);
-        if (type1 != type2) {
-            return type1 - type2;
-        }
-        return f1.getName().compareTo(f2.getName());
-    }
 
     // displays adapter list.
     private boolean setAdapter() {
@@ -1666,122 +1071,10 @@ public class Predatoid extends Activity implements Comparator<File> {
         }
     }
 
-    // This function is called after long-press of a directory, playlist, or cue.
-    // Playback starts immediately without changing the current directory.
-    private boolean playPath(File fpath) {
-        if (fpath.isDirectory()) {
-            return playDir(fpath, null);
-        }
-        return false;
-    }
-
-    /////////////////////////////////////////////////
-    ////////////// Ordinary directories /////////////
-    private class parsed_dir {
-
-        File[] filez;
-        int dirs, cues, flacs;
-    }
-
-    private parsed_dir parseDir(File fpath) {
-
-        int dirs = 0, cues = 0, flacs = 0;
-
-        File[] filez = fpath.listFiles();
-
-        // listFiles() may return null in some conditions.
-        if (filez == null || filez.length == 0) {
-            return null;
-        }
-
-        Comparator<File> cmp = this;
-        Arrays.sort(filez, cmp);
-
-        // now sorted in order of types (dirs/flacs/other), and alphabetically within each type
-
-        for (int i = 0; i < filez.length; i++) {
-            switch (filetype(filez[i])) {
-                case 0:
-                    dirs++;
-                    break;
-                case 1:
-                case 2:
-                case 3:
-                    cues++;
-                    break;
-                case 4:
-                case 5:
-                case 6:
-                case 7:
-                case 8:
-                case 9:
-                case 10:
-                    flacs++;
-                    break;
-                default:
-                    break;
-            }
-        }
-        if (dirs + cues + flacs == 0) {
-            return null;
-        }
-        parsed_dir r = new parsed_dir();
-        r.dirs = dirs;
-        r.cues = cues;
-        r.flacs = flacs;
-        r.filez = new File[dirs + cues + flacs];
-        for (int i = 0; i < dirs + cues + flacs; i++) {
-            r.filez[i] = filez[i];
-        }
-        return r;
-    }
-
-    private boolean playDir(File fpath, String filename) {	// filename is with path
-
-        int k = 0;
-        parsed_dir r = parseDir(fpath);
-        if (r == null) {
-            Toast.makeText(getApplicationContext(), R.string.strNoFiles, Toast.LENGTH_SHORT).show();
-            return false;
-        }
-        ArrayList<String> filly = new ArrayList<String>();
-        for (int i = r.dirs + r.cues; i < r.filez.length; i++) {
-            filly.add(r.filez[i].toString());
-            if (filename != null && r.filez[i].toString().equals(filename)) {
-                k = i - r.dirs - r.cues;
-            }
-        }
-        return playContents(fpath.toString(), filly, null, k, 0);
-    }
-
-    private ArrayList<String> recurseDir(File fpath) {
-        if (!fpath.isDirectory()) {
-            return null;
-        }
-        ArrayList<String> filez = new ArrayList<String>();
-        parsed_dir d = parseDir(fpath);
-        if (d == null) {
-            return null;
-        }
-        for (int i = d.dirs + d.cues; i < d.filez.length; i++) {
-            filez.add(d.filez[i].toString());
-        }
-        for (int i = 0; i < d.dirs; i++) {
-            ArrayList<String> r = recurseDir(d.filez[i]);
-            if (r != null) {
-                for (int k = 0; k < r.size(); k++) {
-                    filez.add(r.get(k));
-                }
-            }
-        }
-        return filez;
-    }
-
     private boolean setAdapterFromMedia() {
         try {
 
             ArrayList<HashMap> sdcardMusic = new ArrayList<HashMap>();
-            readyToPlay = false;
             ContentResolver resolver = getBaseContext().getContentResolver();
             Cursor cursor = resolver.query(MediaStore.Audio.Albums.EXTERNAL_CONTENT_URI, new String[]{"ALBUM", "ARTIST", "NUMSONGS", "_id", "MINYEAR"}, null, null, "ARTIST");
 
@@ -1885,7 +1178,6 @@ public class Predatoid extends Activity implements Comparator<File> {
             IconifiedTextListAdapter ita = new IconifiedTextListAdapter(this);
             ita.setListItems(trackEntries);
             fileList.setAdapter(ita);
-            readyToPlay = true;
             return true;
 
         } catch (Exception e) {

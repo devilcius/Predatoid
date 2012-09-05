@@ -47,15 +47,11 @@ public class PredatoidSrv extends Service {
     public static final int HANDLE_HEADSET_INSERT = 1;
     public static final int HANDLE_HEADSET_REMOVE = 2;
     public static final String ACTION_VIEW = "Predatoid_view";
-    private static int headset_mode = 0;
-    public static int curTrackLen = 0;
-    public static int curTrackStart = 0;
-    private static int last_cue_start = 0;
-
-    // Callback to be called from native code
-    public static void updateTrackLen(int time) {
-        curTrackLen = time - last_cue_start;
-    }
+    private static int headsetMode = 0;
+    private static boolean loopPlaying = false;
+    public static int currentTrackLength = 0;
+    public static int currentTrackStart = 0;
+    public static int currentTrackPosition = 0;
     // Callback used to send new track name or error status to the interface thread.
     private static final RemoteCallbackList<IPredatoidSrvCallback> cBacks = new RemoteCallbackList<IPredatoidSrvCallback>();
 
@@ -64,10 +60,10 @@ public class PredatoidSrv extends Service {
         for (int i = 0; i < k; i++) {
             try {
                 if (!error) {
-                    cBacks.getBroadcastItem(i).playItemChanged(false, s, plist.cur_pos);
+                    cBacks.getBroadcastItem(i).playItemChanged(false, s, plist.currentPosition);
                     PredatoidSrv.this.notify(R.drawable.play_on/*R.drawable.playbackstart*/, s);
                 } else {
-                    cBacks.getBroadcastItem(i).playItemChanged(true, getString(R.string.strStopped), plist.cur_pos);
+                    cBacks.getBroadcastItem(i).playItemChanged(true, getString(R.string.strStopped), plist.currentPosition);
                     if (s.compareTo(getString(R.string.strStopped)) != 0) {
                         cBacks.getBroadcastItem(i).errorReported(s);
                     }
@@ -139,7 +135,7 @@ public class PredatoidSrv extends Service {
                     if (fck_start != 0) {
                         mplayer.seekTo(fck_start * 1000);
                     }
-                    curTrackLen = mplayer.getDuration() / 1000;
+                    currentTrackLength = mplayer.getDuration() / 1000;
                     mplayer.start();
                 }
             });
@@ -195,13 +191,13 @@ public class PredatoidSrv extends Service {
         private String[] files;		// track source files
         private String[] names;		// track names from cue files
         private int[] times; 		// track start times from cue files
-        private int cur_pos;	// current track
-        private int cur_start;	// start seconds the file must be played
-        private PlayThread th;			// main thread
+        private int currentPosition;	// current track
+        private int currentStart;	// start seconds the file must be played
+        private PlayThread thread;			// main thread
         private boolean running;	// either playing or paused
         private boolean paused;
 //        private CueUpdater cup;		// updater for cue playlists
-        private int cur_mode;		// MODE_NONE for mp3, or one of driver_mode
+        private int currentMode;		// MODE_NONE for mp3, or one of driver_mode
         private int driver_mode;	// driver mode in client preferences
 
         public boolean initPlaylist(String path, int items) {
@@ -210,13 +206,13 @@ public class PredatoidSrv extends Service {
             }
 
             files = null;
-            cur_pos = -1;
-            th = null;
+            currentPosition = -1;
+            thread = null;
             paused = false;
             running = false;
             times = null;
             names = null;
-            cur_mode = MODE_NONE;
+            currentMode = MODE_NONE;
             driver_mode = MODE_CALLBACK;
             try {
                 files = new String[items];
@@ -250,32 +246,14 @@ public class PredatoidSrv extends Service {
             }
             return true;
         }
-        private boolean permsOkay = false;
-
-        private boolean initAudioMode(int mode) {
-            if (mode == MODE_DIRECT && !permsOkay) {
-                if (checkSetDevicePermissions()) {
-                    log_msg("checkSetDevicePermissions() returned OK");
-                    permsOkay = true;
-                } else {
-                    log_msg("checkSetDevicePermissions() returned error!");
-                    return false;
-                }
-            }
-            log_msg("initAudioMode(" + mode + "), permsOkay=" + permsOkay);
-
-            cur_mode = mode;
-            return true;
-        }
 
         private int getCurPosition() {
-            //	if(!running) return 0;
-            int currentPosition = 0;
+
             if (mplayer != null) {
-                currentPosition = mplayer.getCurrentPosition() / 1000;
+                return mplayer.getCurrentPosition() / 1000;
             }
 
-            return currentPosition;
+            return 0;
         }
 
         private int getDuration() {
@@ -294,6 +272,7 @@ public class PredatoidSrv extends Service {
 
             private int tid = -1;
 
+            @Override
             public void run() {
                 tid = Process.myTid();
                 running = true;
@@ -303,32 +282,32 @@ public class PredatoidSrv extends Service {
                     wakeLock.acquire();
                 }
                 int k;
-                for (k = 1; running && cur_pos < files.length; cur_pos++) {
-                    log_msg(Process.myTid() + ": trying " + files[cur_pos] + " @ time " + (times[cur_pos] + cur_start) + " mode=" + driver_mode);
+                for (k = 1; running && currentPosition < files.length; currentPosition++) {
+                    log_msg(Process.myTid() + ": trying " + files[currentPosition] + " @ time " + (times[currentPosition] + currentStart) + " mode=" + driver_mode);
                     try {
-                        curTrackLen = 0;
-                        curTrackStart = 0;
+                        currentTrackLength = 0;
+                        currentTrackStart = 0;
 
-                        if (names[cur_pos] != null) {
-                            log_msg("track name = " + names[cur_pos]);
-                            informTrack(names[cur_pos], false);
+                        if (names[currentPosition] != null) {
+                            log_msg("track name = " + names[currentPosition]);
+                            informTrack(names[currentPosition], false);
                         } else {
 
-                            String cur_file = files[cur_pos];
-                            int start = cur_file.lastIndexOf("/") + 1;
-                            int end = cur_file.lastIndexOf(".");
-                            String cf = end > start ? cur_file.substring(start, end) : cur_file.substring(start);
+                            String currentTrack = files[currentPosition];
+                            int start = currentTrack.lastIndexOf("/") + 1;
+                            int end = currentTrack.lastIndexOf(".");
+                            String cf = end > start ? currentTrack.substring(start, end) : currentTrack.substring(start);
                             informTrack(cf, false);
                         }
-                        k = extPlay(files[cur_pos], times[cur_pos] + cur_start);
+                        k = extPlay(files[currentPosition], times[currentPosition] + currentStart);
 
                         nm.cancel(NOTIFY_ID);
                     } catch (Exception e) {
                         log_err("run(): exception in xxxPlay(): " + e.toString());
-                        cur_start = 0;
+                        currentStart = 0;
                         continue;
                     }
-                    cur_start = 0;
+                    currentStart = 0;
                     if (k == 0) {
                         log_msg(Process.myTid() + ": xxxPlay() returned normally");
                     } else {
@@ -343,10 +322,8 @@ public class PredatoidSrv extends Service {
                         informTrack(err, true);
                         break;
                     }
-//                    if (names[0] != null) {
-//                        break; // just in case
-//                    }
                 }
+
                 if (wakeLock.isHeld()) {
                     wakeLock.release();
                 }
@@ -367,9 +344,9 @@ public class PredatoidSrv extends Service {
             running = false;
             log_msg("stop()");
             nm.cancel(NOTIFY_ID);
-            if (th != null) {
+            if (thread != null) {
                 int i = Process.getThreadPriority(Process.myTid());
-                int tid = th.getThreadId();
+                int tid = thread.getThreadId();
                 int k = 0;
 
                 log_msg(String.format("stop(): terminating thread %d from %d", tid, Process.myTid()));
@@ -383,10 +360,10 @@ public class PredatoidSrv extends Service {
                     paused = false;
                 }
                 try {
-                    while (th.isAlive()) {
-                        th.join(100);
+                    while (thread.isAlive()) {
+                        thread.join(100);
                         k++;
-                        if (th.isAlive()) {
+                        if (thread.isAlive()) {
                             SystemClock.sleep(50);
                         } else {
                             break;
@@ -398,12 +375,12 @@ public class PredatoidSrv extends Service {
                 } catch (InterruptedException e) {
                     log_err("Interrupted exception in stop(): " + e.toString());
                 }
-                if (th.isAlive()) {
+                if (thread.isAlive()) {
                     log_err(String.format("stop(): thread %d is still alive after %d ms", tid, k * 100));
                 } else {
                     log_msg(String.format("stop(): thread terminated after %d ms", k * 100));
                 }
-                th = null;
+                thread = null;
                 Process.setThreadPriority(i);
             } else {
                 log_msg(String.format("stop(): player thread was null (my tid %d)", Process.myTid()));
@@ -417,11 +394,11 @@ public class PredatoidSrv extends Service {
             if (files == null || n >= files.length || n < 0) {
                 return false;
             }
-            cur_pos = n;
-            cur_start = start;
-            th = new PlayThread();
+            currentPosition = n;
+            currentStart = start;
+            thread = new PlayThread();
             log_msg(String.format("play(): created new thread from %d", Process.myTid()));
-            th.start();
+            thread.start();
             return true;
         }
 
@@ -433,12 +410,12 @@ public class PredatoidSrv extends Service {
 
         public boolean play_next() {
             log_msg("play_next()");
-            return play(cur_pos + 1, 0);
+            return play(currentPosition + 1, 0);
         }
 
         public boolean play_prev() {
             log_msg("play_prev()");
-            return play(cur_pos - 1, 0);
+            return play(currentPosition - 1, 0);
         }
 
         public boolean pause() {
@@ -531,7 +508,7 @@ public class PredatoidSrv extends Service {
     //// The interface we expose to clients.  It's returned to them when the connection is established.
     private static final IPredatoidSrv.Stub binder = new IPredatoidSrv.Stub() {
 
-        public boolean init_playlist(String path, int nitems) {
+        public boolean initPlaylist(String path, int nitems) {
             plist.stop(); //	plist = null; 		plist = new playlist();
             return plist.initPlaylist(path, nitems);
         }
@@ -544,15 +521,15 @@ public class PredatoidSrv extends Service {
             return plist.play(n, start);
         }
 
-        public boolean seek_to(int p) {
+        public boolean seekTo(int p) {
             return plist.seekTo(p);
         }
 
-        public boolean play_next() {
+        public boolean playNext() {
             return plist.play_next();
         }
 
-        public boolean play_prev() {
+        public boolean playPrevious() {
             return plist.play_prev();
         }
 
@@ -564,11 +541,11 @@ public class PredatoidSrv extends Service {
             return plist.resume();
         }
 
-        public boolean inc_vol() {
+        public boolean increaseVolume() {
             return plist.inc_vol();
         }
 
-        public boolean dec_vol() {
+        public boolean decreaseVolume() {
             return plist.dec_vol();
         }
 
@@ -577,64 +554,64 @@ public class PredatoidSrv extends Service {
             return true;
         }
 
-        public boolean is_running() {
+        public boolean isRunning() {
             return plist.running;
         }
 
-        public boolean is_paused() {
+        public boolean isPaused() {
             return plist.paused;
         }
 
-        public int get_cur_mode() {
-            return plist.cur_mode;
+        public int getCurrentMode() {
+            return plist.currentMode;
         }
 
-        public String get_cur_dir() {
+        public String getCurrentDirectory() {
             return plist.dir;
         }
 
-        public int get_cur_pos() {
-            return plist.cur_pos;
+        public int getCurrentPosition() {
+            return plist.currentPosition;
         }
 
-        public int get_cur_seconds() {
+        public int getCurrentSeconds() {
             return plist.getCurPosition();
         }
 
-        public int get_track_duration() {
+        public int getTrackDuration() {
             return plist.getDuration();
         }
 
-        public int get_cur_track_start() {
-            return curTrackStart;
+        public int getCurrentTrackStart() {
+            return currentTrackStart;
         }
 
-        public int get_cur_track_len() {
-            return curTrackLen;
+        public int getCurrentTrackLength() {
+            return currentTrackLength;
         }
 
-        public String get_cur_track_source() {
+        public String getCurrentTrackSource() {
             try {
-                return plist.files[plist.cur_pos];
+                return plist.files[plist.currentPosition];
             } catch (Exception e) {
                 return null;
             }
         }
 
-        public String get_cur_track_name() {
+        public String getCurrentTrackName() {
             try {
-                return plist.names[plist.cur_pos];
+                return plist.names[plist.currentPosition];
             } catch (Exception e) {
                 return null;
             }
         }
 
-        public void set_driver_mode(int m) {
-            plist.driver_mode = m;
+        public void setHeadsetMode(int m) {
+            headsetMode = m;
         }
 
-        public void set_headset_mode(int m) {
-            headset_mode = m;
+        public void setLoopPlaying(boolean ok) {
+            loopPlaying = ok;
         }
 
         public void registerCallback(IPredatoidSrvCallback cb) {
@@ -726,7 +703,7 @@ public class PredatoidSrv extends Service {
             if (isIntentHeadsetRemoved(intent)) {
                 log_msg("Headset Removed: " + intent.getAction());
                 if (plist != null && plist.running && !plist.paused) {
-                    if (((headset_mode & HANDLE_HEADSET_REMOVE) != 0)) {
+                    if (((headsetMode & HANDLE_HEADSET_REMOVE) != 0)) {
                         plist.pause();
                         informPauseResume(true);
                     }
@@ -735,7 +712,7 @@ public class PredatoidSrv extends Service {
             } else if (isIntentHeadsetInserted(intent)) {
                 log_msg("Headset Inserted: " + intent.getAction());
                 if (needResume) {
-                    if (plist != null && (headset_mode & HANDLE_HEADSET_INSERT) != 0) {
+                    if (plist != null && (headsetMode & HANDLE_HEADSET_INSERT) != 0) {
                         plist.resume();
                         informPauseResume(false);
                     }

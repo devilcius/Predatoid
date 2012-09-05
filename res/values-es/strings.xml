@@ -69,7 +69,7 @@
 <string name="strCantRemovePlist">No se pudo eliminar la secuencia de reproducción</string>
 <string name="strSrvInitFail">El servidor falló la inicialización ¡Cerrando!</string>
 <string name="strMplayerError">Error del reproductor multimedial </string>
-<string name="strDriverMode">Acceso directo a dispositivos tangibles (hardware)</string>
+<string name="strLoopMode">Reproducir en modo bucle</string>
 <string name="strSaveBooks">Grabar señaldores automáticamente</string>
 <string name="strAbout">Predatoid, basado en andLess para Android</string>
 <string name="strAbout1">Acerca de</string>

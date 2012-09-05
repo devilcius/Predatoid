@@ -69,7 +69,7 @@
 <string name="strCantRemovePlist">Невозможно удалить старый плейлист</string>
 <string name="strSrvInitFail">Ошибка инициализации сервера. Выхожу!</string>
 <string name="strMplayerError">Ошибка медиа-плеера</string>
-<string name="strDriverMode">Прямой доступ к драйверу</string>
+<string name="strLoopMode">Играть в режиме петли</string>
 <string name="strSaveBooks">Автосохранение закладок</string>
 <string name="strAbout">Android плеер Predatoid для звуковых файлов без потерь. Дата сборки Mar 29, 2012</string>
 <string name="strAbout1">О программе</string>

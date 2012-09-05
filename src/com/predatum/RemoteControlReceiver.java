@@ -36,16 +36,16 @@ public class RemoteControlReceiver extends BroadcastReceiver {
                     break;
                 case KeyEvent.KEYCODE_HEADSETHOOK:
                 case KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE:
-                    if (srv.is_running() && !srv.is_paused())
+                    if (srv.isRunning() && !srv.isPaused())
                         srv.pause();
                     else
                         srv.resume();
                     break;
                 case KeyEvent.KEYCODE_MEDIA_NEXT:
-                    srv.play_next();
+                    srv.playNext();
                     break;
                 case KeyEvent.KEYCODE_MEDIA_PREVIOUS:
-                    srv.play_prev();
+                    srv.playPrevious();
                     break;
                 }
             } catch (Exception e) {
