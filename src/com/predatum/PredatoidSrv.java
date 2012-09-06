@@ -61,7 +61,7 @@ public class PredatoidSrv extends Service {
             try {
                 if (!error) {
                     cBacks.getBroadcastItem(i).playItemChanged(false, s, plist.currentPosition);
-                    PredatoidSrv.this.notify(R.drawable.play_on/*R.drawable.playbackstart*/, s);
+                    PredatoidSrv.this.notify(R.drawable.play_on, s);
                 } else {
                     cBacks.getBroadcastItem(i).playItemChanged(true, getString(R.string.strStopped), plist.currentPosition);
                     if (s.compareTo(getString(R.string.strStopped)) != 0) {
@@ -100,7 +100,7 @@ public class PredatoidSrv extends Service {
                 mplayer = new MediaPlayer();
             }
             fck_start = start;
-
+            mplayer.reset();
             mplayer.setDataSource(file);
             mplayer.setOnErrorListener(new MediaPlayer.OnErrorListener() {
 
@@ -196,7 +196,6 @@ public class PredatoidSrv extends Service {
         private PlayThread thread;			// main thread
         private boolean running;	// either playing or paused
         private boolean paused;
-//        private CueUpdater cup;		// updater for cue playlists
         private int currentMode;		// MODE_NONE for mp3, or one of driver_mode
         private int driver_mode;	// driver mode in client preferences
 
@@ -271,6 +270,8 @@ public class PredatoidSrv extends Service {
         private class PlayThread extends Thread {
 
             private int tid = -1;
+            private boolean keepOnRocking = true;
+            int k;
 
             @Override
             public void run() {
@@ -281,49 +282,50 @@ public class PredatoidSrv extends Service {
                 if (!wakeLock.isHeld()) {
                     wakeLock.acquire();
                 }
-                int k;
-                for (k = 1; running && currentPosition < files.length; currentPosition++) {
-                    log_msg(Process.myTid() + ": trying " + files[currentPosition] + " @ time " + (times[currentPosition] + currentStart) + " mode=" + driver_mode);
-                    try {
-                        currentTrackLength = 0;
-                        currentTrackStart = 0;
-
-                        if (names[currentPosition] != null) {
-                            log_msg("track name = " + names[currentPosition]);
-                            informTrack(names[currentPosition], false);
-                        } else {
-
-                            String currentTrack = files[currentPosition];
-                            int start = currentTrack.lastIndexOf("/") + 1;
-                            int end = currentTrack.lastIndexOf(".");
-                            String cf = end > start ? currentTrack.substring(start, end) : currentTrack.substring(start);
-                            informTrack(cf, false);
-                        }
-                        k = extPlay(files[currentPosition], times[currentPosition] + currentStart);
-
-                        nm.cancel(NOTIFY_ID);
-                    } catch (Exception e) {
-                        log_err("run(): exception in xxxPlay(): " + e.toString());
-                        currentStart = 0;
-                        continue;
-                    }
-                    currentStart = 0;
-                    if (k == 0) {
-                        log_msg(Process.myTid() + ": xxxPlay() returned normally");
-                    } else {
-                        log_err(String.format("run(): xxxPlay() returned error %d", k));
-                        running = false;
-                        String err, s[] = getResources().getStringArray(R.array.Errors);
+                while (keepOnRocking) {
+                    for (k = 1; running && currentPosition < files.length; currentPosition++) {
+                        log_msg(Process.myTid() + ": trying " + files[currentPosition] + " @ time " + (times[currentPosition] + currentStart) + " mode=" + driver_mode);
                         try {
-                            err = s[k - 1];
-                        } catch (Exception e) {
-                            err = getString(R.string.strInternalError);
-                        }
-                        informTrack(err, true);
-                        break;
-                    }
-                }
+                            currentTrackLength = 0;
+                            currentTrackStart = 0;
 
+                            if (names[currentPosition] != null) {
+                                log_msg("track name = " + names[currentPosition]);
+                                informTrack(names[currentPosition], false);
+                            } else {
+
+                                String currentTrack = files[currentPosition];
+                                int start = currentTrack.lastIndexOf("/") + 1;
+                                int end = currentTrack.lastIndexOf(".");
+                                String cf = end > start ? currentTrack.substring(start, end) : currentTrack.substring(start);
+                                informTrack(cf, false);
+                            }
+                            k = extPlay(files[currentPosition], times[currentPosition] + currentStart);
+
+                            nm.cancel(NOTIFY_ID);
+                        } catch (Exception e) {
+                            log_err("run(): exception in xxxPlay(): " + e.toString());
+                            currentStart = 0;
+                            continue;
+                        }
+                        currentStart = 0;
+                        if (k == 0) {
+                            log_msg(Process.myTid() + ": xxxPlay() returned normally");
+                        } else {
+                            log_err(String.format("run(): xxxPlay() returned error %d", k));
+                            running = false;
+                            String err, s[] = getResources().getStringArray(R.array.Errors);
+                            try {
+                                err = s[k - 1];
+                            } catch (Exception e) {
+                                err = getString(R.string.strInternalError);
+                            }
+                            informTrack(err, true);
+                            break;
+                        }
+                    }
+                    currentPosition = 0;
+                }
                 if (wakeLock.isHeld()) {
                     wakeLock.release();
                 }
@@ -390,7 +392,7 @@ public class PredatoidSrv extends Service {
 
         public boolean play(int n, int start) {
             log_msg(String.format("play(%d)", n));
-            stop();
+            //stop();
             if (files == null || n >= files.length || n < 0) {
                 return false;
             }
@@ -408,12 +410,12 @@ public class PredatoidSrv extends Service {
             return true;
         }
 
-        public boolean play_next() {
+        public boolean playNext() {
             log_msg("play_next()");
             return play(currentPosition + 1, 0);
         }
 
-        public boolean play_prev() {
+        public boolean playPrevious() {
             log_msg("play_prev()");
             return play(currentPosition - 1, 0);
         }
@@ -469,7 +471,7 @@ public class PredatoidSrv extends Service {
             return paused == false;
         }
 
-        public boolean dec_vol() {
+        public boolean decreaseVolume() {
             log_msg("dec_vol()");
             if (files == null || !running) {
                 return false;
@@ -486,7 +488,7 @@ public class PredatoidSrv extends Service {
             return true;
         }
 
-        public boolean inc_vol() {
+        public boolean increaseVolume() {
             log_msg("inc_vol()");
             if (files == null || !running) {
                 return false;
@@ -509,7 +511,7 @@ public class PredatoidSrv extends Service {
     private static final IPredatoidSrv.Stub binder = new IPredatoidSrv.Stub() {
 
         public boolean initPlaylist(String path, int nitems) {
-            plist.stop(); //	plist = null; 		plist = new playlist();
+            //plist.stop(); //	plist = null; 		plist = new playlist();
             return plist.initPlaylist(path, nitems);
         }
 
@@ -526,11 +528,11 @@ public class PredatoidSrv extends Service {
         }
 
         public boolean playNext() {
-            return plist.play_next();
+            return plist.playNext();
         }
 
         public boolean playPrevious() {
-            return plist.play_prev();
+            return plist.playPrevious();
         }
 
         public boolean pause() {
@@ -542,11 +544,11 @@ public class PredatoidSrv extends Service {
         }
 
         public boolean increaseVolume() {
-            return plist.inc_vol();
+            return plist.increaseVolume();
         }
 
         public boolean decreaseVolume() {
-            return plist.dec_vol();
+            return plist.decreaseVolume();
         }
 
         public boolean shutdown() {

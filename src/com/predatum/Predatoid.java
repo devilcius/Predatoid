@@ -102,8 +102,6 @@ public class Predatoid extends Activity {
 
         public void playItemChanged(boolean error, String name, final int trackNum) {
             log_msg(String.format("track name changed to %s", name));
-            log_msg(String.format("track num = %s", trackNum));
-            log_msg(String.format("filelist count = %s", fileList.getChildCount()));
             Message msg = new Message();
             Bundle data = new Bundle();
             data.putString("filename", name);
@@ -506,7 +504,7 @@ public class Predatoid extends Activity {
                 setAdapterFromAlbum();
                 try {
                     if (!srv.isRunning()) {
-                        playContents(startfile, filesToPlay, songNames, 0, i);
+                        playContents(startfile, filesToPlay, songNames, 0, 0);
                         currentTrack = 0;
                         currPlayingAlbumID = iconifiedText.getAlbumID();
                     }
@@ -515,7 +513,7 @@ public class Predatoid extends Activity {
                 }
                 canGoBack = true;
             } else {
-                playContents(startfile, filesToPlay, songNames, i, i);
+                playContents(startfile, filesToPlay, songNames, i, 0);
                 currentTrack = i;
                 currPlayingAlbumID = iconifiedText.getAlbumID();
             }
@@ -747,6 +745,7 @@ public class Predatoid extends Activity {
     ////////////////////////////////////////////////////////////////
     ///////////////////////// Entry point //////////////////////////
     ////////////////////////////////////////////////////////////////
+    @Override
     protected void onResume() {
         super.onResume();
 
