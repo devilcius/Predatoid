@@ -324,7 +324,13 @@ public class PredatoidSrv extends Service {
                             break;
                         }
                     }
-                    currentPosition = 0;
+                    if (loopPlaying) {
+                        keepOnRocking = true; //yeah!
+                        currentPosition = 0;
+                    } else {
+                        keepOnRocking = false;
+                    }
+
                 }
                 if (wakeLock.isHeld()) {
                     wakeLock.release();
