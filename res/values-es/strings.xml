@@ -45,7 +45,7 @@
 <string name="strCantSetup">¡Imposible instalar la interfaz!</string>
 <string name="strBadPlist">Secuencia de reproducción en blanco o inválida</string>
 <string name="strBadCue">Listado secuencial CUE no soportado o no reconocido</string>
-<string name="strShuffle">Entremezclar todas las secuencias de reproducción</string>
+<string name="strResumeLastTrackPlayed">Reanudar la última pista reproducida</string>
 <string name="strSrvFail">¡Falla del servidor!</string>
 <string name="strNoCueSrc"> El listado secuencial CUE refiere a archivos inexistentes</string>
 <string name="strCueSrcExt">El listado secuencial CUE refiere a archivos con extensions no-soportadas</string>

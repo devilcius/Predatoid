@@ -45,7 +45,7 @@
 <string name="strCantSetup">Cannot setup interface!</string>
 <string name="strBadPlist">Empty or invalid playlist</string>
 <string name="strBadCue">CUE file not recognized or not supported</string>
-<string name="strShuffle">Shuffle all playlists</string>
+<string name="strResumeLastTrackPlayed">Resume last track played</string>
 <string name="strSrvFail">Server failure!</string>
 <string name="strNoCueSrc">CUE file references non-existing source</string>
 <string name="strCueSrcExt">CUE file references source file with unsupported extension</string>

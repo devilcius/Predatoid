@@ -37,11 +37,11 @@ public class Preferences extends PreferenceActivity {
         PreferenceCategory launchPrefCat = new PreferenceCategory(this);
         launchPrefCat.setTitle(R.string.strBSettings);
         root.addPreference(launchPrefCat);
-
-        CheckBoxPreference shuffle_mode = new CheckBoxPreference(this);
-        shuffle_mode.setTitle(R.string.strShuffle);
-        shuffle_mode.setKey("shuffle_mode");
-        launchPrefCat.addPreference(shuffle_mode);
+        //resume last track played on launching the app
+        CheckBoxPreference resumeLastTrack = new CheckBoxPreference(this);
+        resumeLastTrack.setTitle(R.string.strResumeLastTrackPlayed);
+        resumeLastTrack.setKey("resume_last_track_played");
+        launchPrefCat.addPreference(resumeLastTrack);
 
         CheckBoxPreference loopMode = new CheckBoxPreference(this);
         loopMode.setTitle(R.string.strLoopMode);

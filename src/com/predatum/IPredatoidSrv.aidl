@@ -16,7 +16,6 @@ interface IPredatoidSrv {
 	boolean shutdown();
 	boolean isRunning();
 	boolean isPaused();
-	int 	getCurrentMode();
 	String  getCurrentDirectory();
 	int	getCurrentPosition();
 	String  getCurrentTrackSource();

@@ -45,7 +45,7 @@
 <string name="strCantSetup">Ошибка конфигурации интерфейса</string>
 <string name="strBadPlist">Пустой или неподдерживаемый плейлист</string>
 <string name="strBadCue">Формат CUE файла неверный или неподдерживаемый</string>
-<string name="strShuffle">Перемешивать все плейлисты</string>
+<string name="strResumeLastTrackPlayed">возобновит последний трек играет</string>
 <string name="strSrvFail">Сбой сервера!</string>
 <string name="strNoCueSrc">Ссылка на несуществующий исходный файл в CUE файле</string>
 <string name="strCueSrcExt">Ссылка на исходный файл с неподдерживаемым разрешением в CUE файле</string>

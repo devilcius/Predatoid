@@ -45,7 +45,7 @@
 <string name="strCantSetup">无法安装!</string>
 <string name="strBadPlist">空文件或者无效的播放列表</string>
 <string name="strBadCue">CUE文件无法识别或者不支持</string>
-<string name="strShuffle">随机播放所有播放列表</string>
+<string name="strResumeLastTrackPlayed">恢復最後播放曲目</string>
 <string name="strSrvFail">服务失败!</string>
 <string name="strNoCueSrc">CUE文件引用不存在的源</string>
 <string name="strCueSrcExt">CUE文件的引用与不支持扩展的源文件</string>

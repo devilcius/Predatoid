@@ -26,17 +26,13 @@ import android.util.Log;
 
 public class PredatoidSrv extends Service {
 
-    public static final int MODE_NONE = 0;
-    public static final int MODE_DIRECT = 1;
-    public static final int MODE_LIBMEDIA = 2;
-    public static final int MODE_CALLBACK = 3;
     // Ad hoc value. 0x2000 seems to be a maximum used by the driver. MSM datasheets needed.
     private int volume = 0x1000;
     // The lock to acquire so as the device won't go to sleep when we'are playing.
     private PowerManager.WakeLock wakeLock = null;
     private NotificationManager nm = null;
 
-    private void log_msg(String msg) {
+    private void logMessage(String msg) {
         Log.i(getClass().getSimpleName(), msg);
     }
 
@@ -55,17 +51,19 @@ public class PredatoidSrv extends Service {
     // Callback used to send new track name or error status to the interface thread.
     private static final RemoteCallbackList<IPredatoidSrvCallback> cBacks = new RemoteCallbackList<IPredatoidSrvCallback>();
 
-    private void informTrack(String s, boolean error) {
+    private void informTrack(String trackName, boolean error) {
+        
+        PredatoidSrv.this.notifyStatusBar(R.drawable.play_on, trackName);
+        
         final int k = cBacks.beginBroadcast();
         for (int i = 0; i < k; i++) {
             try {
                 if (!error) {
-                    cBacks.getBroadcastItem(i).playItemChanged(false, s, plist.currentPosition);
-                    PredatoidSrv.this.notify(R.drawable.play_on, s);
+                    cBacks.getBroadcastItem(i).playItemChanged(false, trackName, plist.currentPosition);
                 } else {
                     cBacks.getBroadcastItem(i).playItemChanged(true, getString(R.string.strStopped), plist.currentPosition);
-                    if (s.compareTo(getString(R.string.strStopped)) != 0) {
-                        cBacks.getBroadcastItem(i).errorReported(s);
+                    if (trackName.compareTo(getString(R.string.strStopped)) != 0) {
+                        cBacks.getBroadcastItem(i).errorReported(trackName);
                     }
                 }
             } catch (RemoteException e) {
@@ -122,7 +120,7 @@ public class PredatoidSrv extends Service {
             mplayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
 
                 public void onCompletion(MediaPlayer mp) {
-                    log_msg("mplayer playback completed");
+                    logMessage("mplayer playback completed");
                     synchronized (mplayer_lock) {
                         mplayer_lock.notify();
                     }
@@ -139,10 +137,8 @@ public class PredatoidSrv extends Service {
                     mplayer.start();
                 }
             });
-
             mplayer.prepare();
-            //SystemClock.sleep(250);
-            //if(!mplayer.isPlaying()) return LIBLOSSLESS_ERR_INV_PARM;
+
             synchronized (mplayer_lock) {
                 mplayer_lock.wait();
             }
@@ -163,7 +159,7 @@ public class PredatoidSrv extends Service {
     }
     private static final int NOTIFY_ID = R.drawable.icon;
 
-    private void notify(int icon, String s) {
+    public void notifyStatusBar(int icon, String s) {
         if (nm == null) {
             return;
         }
@@ -189,14 +185,13 @@ public class PredatoidSrv extends Service {
 
         private String dir;		// source file(s) path
         private String[] files;		// track source files
-        private String[] names;		// track names from cue files
+        private String[] trackNames;		// track names from playlist
         private int[] times; 		// track start times from cue files
         private int currentPosition;	// current track
         private int currentStart;	// start seconds the file must be played
         private PlayThread thread;			// main thread
         private boolean running;	// either playing or paused
         private boolean paused;
-        private int currentMode;		// MODE_NONE for mp3, or one of driver_mode
         private int driver_mode;	// driver mode in client preferences
 
         public boolean initPlaylist(String path, int items) {
@@ -210,12 +205,10 @@ public class PredatoidSrv extends Service {
             paused = false;
             running = false;
             times = null;
-            names = null;
-            currentMode = MODE_NONE;
-            driver_mode = MODE_CALLBACK;
+            trackNames = null;
             try {
                 files = new String[items];
-                names = new String[items];
+                trackNames = new String[items];
                 times = new int[items];
             } catch (Exception e) {
                 log_err("exception in initPlaylist(): " + e.toString());
@@ -234,9 +227,9 @@ public class PredatoidSrv extends Service {
             try {
                 files[pos] = new String(track_source);
                 if (track_name != null) {
-                    names[pos] = new String(track_name);
+                    trackNames[pos] = new String(track_name);
                 } else {
-                    names[pos] = null;
+                    trackNames[pos] = null;
                 }
                 times[pos] = start_time;
             } catch (Exception e) {
@@ -272,26 +265,25 @@ public class PredatoidSrv extends Service {
             private int tid = -1;
             private boolean keepOnRocking = true;
             int k;
-
             @Override
             public void run() {
                 tid = Process.myTid();
                 running = true;
-                log_msg("run(): starting new thread " + tid);
+                logMessage("run(): starting new thread " + tid);
                 Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO);
                 if (!wakeLock.isHeld()) {
                     wakeLock.acquire();
                 }
                 while (keepOnRocking) {
                     for (k = 1; running && currentPosition < files.length; currentPosition++) {
-                        log_msg(Process.myTid() + ": trying " + files[currentPosition] + " @ time " + (times[currentPosition] + currentStart) + " mode=" + driver_mode);
+                        logMessage(Process.myTid() + ": trying " + files[currentPosition] + " @ time " + (times[currentPosition] + currentStart) + " mode=" + driver_mode);
                         try {
                             currentTrackLength = 0;
                             currentTrackStart = 0;
-
-                            if (names[currentPosition] != null) {
-                                log_msg("track name = " + names[currentPosition]);
-                                informTrack(names[currentPosition], false);
+                            
+                            if (trackNames[currentPosition] != null) {
+                                logMessage("track name = " + trackNames[currentPosition]);
+                                informTrack(trackNames[currentPosition], false);
                             } else {
 
                                 String currentTrack = files[currentPosition];
@@ -310,7 +302,7 @@ public class PredatoidSrv extends Service {
                         }
                         currentStart = 0;
                         if (k == 0) {
-                            log_msg(Process.myTid() + ": xxxPlay() returned normally");
+                            logMessage(Process.myTid() + ": xxxPlay() returned normally");
                         } else {
                             log_err(String.format("run(): xxxPlay() returned error %d", k));
                             running = false;
@@ -335,14 +327,13 @@ public class PredatoidSrv extends Service {
                 if (wakeLock.isHeld()) {
                     wakeLock.release();
                 }
-                log_msg(Process.myTid() + ": thread about to exit");
+                logMessage(Process.myTid() + ": thread about to exit");
                 if (k == 0) {
                     informTrack(getString(R.string.strStopped), true);
                 }
 
                 running = false;
             }
-
             public int getThreadId() {
                 return tid;
             }
@@ -350,14 +341,14 @@ public class PredatoidSrv extends Service {
 
         public boolean stop() {
             running = false;
-            log_msg("stop()");
+            logMessage("stop()");
             nm.cancel(NOTIFY_ID);
             if (thread != null) {
                 int i = Process.getThreadPriority(Process.myTid());
                 int tid = thread.getThreadId();
                 int k = 0;
 
-                log_msg(String.format("stop(): terminating thread %d from %d", tid, Process.myTid()));
+                logMessage(String.format("stop(): terminating thread %d from %d", tid, Process.myTid()));
                 Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO);
                 if (mplayer != null) {
                     synchronized (mplayer_lock) {
@@ -386,48 +377,48 @@ public class PredatoidSrv extends Service {
                 if (thread.isAlive()) {
                     log_err(String.format("stop(): thread %d is still alive after %d ms", tid, k * 100));
                 } else {
-                    log_msg(String.format("stop(): thread terminated after %d ms", k * 100));
+                    logMessage(String.format("stop(): thread terminated after %d ms", k * 100));
                 }
                 thread = null;
                 Process.setThreadPriority(i);
             } else {
-                log_msg(String.format("stop(): player thread was null (my tid %d)", Process.myTid()));
+                logMessage(String.format("stop(): player thread was null (my tid %d)", Process.myTid()));
             }
             return true;
         }
 
         public boolean play(int n, int start) {
-            log_msg(String.format("play(%d)", n));
-            //stop();
+            logMessage(String.format("play(%d)", n));
+
             if (files == null || n >= files.length || n < 0) {
                 return false;
             }
             currentPosition = n;
             currentStart = start;
             thread = new PlayThread();
-            log_msg(String.format("play(): created new thread from %d", Process.myTid()));
+            logMessage(String.format("play(): created new thread from %d", Process.myTid()));
             thread.start();
             return true;
         }
 
         public boolean seekTo(int p) {
-            log_msg(String.format("seekTo(%d)", p));
+            logMessage(String.format("seekTo(%d)", p));
             mplayer.seekTo(p);
             return true;
         }
 
         public boolean playNext() {
-            log_msg("play_next()");
+            logMessage("play_next()");
             return play(currentPosition + 1, 0);
         }
 
         public boolean playPrevious() {
-            log_msg("play_prev()");
+            logMessage("playPrevious()");
             return play(currentPosition - 1, 0);
         }
 
         public boolean pause() {
-            log_msg("pause()");
+            logMessage("pause()");
             if (files == null || paused) {
                 return false;
             }
@@ -453,7 +444,7 @@ public class PredatoidSrv extends Service {
         }
 
         public boolean resume() {
-            log_msg("resume()");
+            logMessage("resume()");
             if (files == null || !paused) {
                 return false;
             }
@@ -478,7 +469,7 @@ public class PredatoidSrv extends Service {
         }
 
         public boolean decreaseVolume() {
-            log_msg("dec_vol()");
+            logMessage("dec_vol()");
             if (files == null || !running) {
                 return false;
             }
@@ -495,7 +486,7 @@ public class PredatoidSrv extends Service {
         }
 
         public boolean increaseVolume() {
-            log_msg("inc_vol()");
+            logMessage("inc_vol()");
             if (files == null || !running) {
                 return false;
             }
@@ -570,10 +561,6 @@ public class PredatoidSrv extends Service {
             return plist.paused;
         }
 
-        public int getCurrentMode() {
-            return plist.currentMode;
-        }
-
         public String getCurrentDirectory() {
             return plist.dir;
         }
@@ -608,7 +595,7 @@ public class PredatoidSrv extends Service {
 
         public String getCurrentTrackName() {
             try {
-                return plist.names[plist.currentPosition];
+                return plist.trackNames[plist.currentPosition];
             } catch (Exception e) {
                 return null;
             }
@@ -653,14 +640,14 @@ public class PredatoidSrv extends Service {
     ///////////////////// Overrides ///////////////////////
     @Override
     public IBinder onBind(Intent intent) {
-        log_msg("onBind()");
+        logMessage("onBind()");
         return binder;
     }
 
     @Override
     public void onCreate() {
         super.onCreate();
-        log_msg("onCreate()");
+        logMessage("onCreate()");
         registerPhoneListener();
         registerHeadsetReciever();
         if (wakeLock == null) {
@@ -678,7 +665,7 @@ public class PredatoidSrv extends Service {
 
     @Override
     public void onDestroy() {
-        log_msg("onDestroy()");
+        logMessage("onDestroy()");
         //	cBacks.kill();
         unregisterPhoneListener();
         unregisterHeadsetReciever();
@@ -696,7 +683,7 @@ public class PredatoidSrv extends Service {
 
     @Override
     public boolean onUnbind(Intent intent) {
-        log_msg("onUnbind()");
+        logMessage("onUnbind()");
         //	if(nm != null) nm.cancel(NOTIFY_ID);
         return super.onUnbind(intent);
     }
@@ -709,7 +696,7 @@ public class PredatoidSrv extends Service {
         @Override
         public void onReceive(Context context, Intent intent) {
             if (isIntentHeadsetRemoved(intent)) {
-                log_msg("Headset Removed: " + intent.getAction());
+                logMessage("Headset Removed: " + intent.getAction());
                 if (plist != null && plist.running && !plist.paused) {
                     if (((headsetMode & HANDLE_HEADSET_REMOVE) != 0)) {
                         plist.pause();
@@ -718,7 +705,7 @@ public class PredatoidSrv extends Service {
                     needResume = true;
                 }
             } else if (isIntentHeadsetInserted(intent)) {
-                log_msg("Headset Inserted: " + intent.getAction());
+                logMessage("Headset Inserted: " + intent.getAction());
                 if (needResume) {
                     if (plist != null && (headsetMode & HANDLE_HEADSET_INSERT) != 0) {
                         plist.resume();
@@ -796,10 +783,10 @@ public class PredatoidSrv extends Service {
         try {
             File f = new File(MSM_DEVICE);
             if (f.canRead() && f.canWrite() /* && f1.canRead() && f1.canWrite() */) {
-                log_msg("neednt set device permissions");
+                logMessage("neednt set device permissions");
                 return true;
             }
-            log_msg("attempting to set device permissions");
+            logMessage("attempting to set device permissions");
             process = Runtime.getRuntime().exec("su");
             os = new DataOutputStream(process.getOutputStream());
             os.flush();

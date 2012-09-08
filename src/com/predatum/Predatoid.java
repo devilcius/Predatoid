@@ -75,11 +75,11 @@ public class Predatoid extends Activity {
     private int currentTrack = 0;
     private boolean pauseOnStart = false;
     // Changed to true in playlists/settings dialogs
-    private boolean playlistChanged = false;
+    private boolean resumeLastTrackPlayed = false;
     //Phone's back button go back to previous item list
     private boolean canGoBack = false;
 
-    private void log_msg(String msg) {
+    private void logMessage(String msg) {
         Log.i(getClass().getSimpleName(), msg);
     }
 
@@ -90,7 +90,7 @@ public class Predatoid extends Activity {
     private Button buttPause, buttPrev, buttNext, buttVMinus, buttVPlus, ButtonVolume;
     private TextView nowTime, allTime;
     private ListView fileList;
-    private SeekBar pBar;
+    private SeekBar progressBar;
     private String curWindowTitle = null;
     private static final String resume_bmark = "/resume.bmark";
     // Interface which is an entry point to server functions. Returned upon connection to the server.
@@ -101,7 +101,7 @@ public class Predatoid extends Activity {
     private IPredatoidSrvCallback cBack = new IPredatoidSrvCallback.Stub() {
 
         public void playItemChanged(boolean error, String name, final int trackNum) {
-            log_msg(String.format("track name changed to %s", name));
+            logMessage(String.format("track name changed to %s", name));
             Message msg = new Message();
             Bundle data = new Bundle();
             data.putString("filename", name);
@@ -115,7 +115,7 @@ public class Predatoid extends Activity {
         }
 
         public void errorReported(String name) {
-            log_msg(String.format("error \"%s\" received", name));
+            logMessage(String.format("error \"%s\" received", name));
             Message msg = new Message();
             Bundle data = new Bundle();
             data.putString("errormsg", name);
@@ -138,14 +138,14 @@ public class Predatoid extends Activity {
                 log_err("service not stopped");
             }
             if (startService(intie) == null) {
-                log_msg("service not started");
+                logMessage("service not started");
             } else {
-                log_msg("started service");
+                logMessage("started service");
             }
             if (!bindService(intie, conn, 0)) {
                 log_err("cannot bind service");
             } else {
-                log_msg("service bound");
+                logMessage("service bound");
             }
         }
     };
@@ -156,7 +156,7 @@ public class Predatoid extends Activity {
         return new ServiceConnection() {
 
             public void onServiceConnected(ComponentName cn, IBinder obj) {
-
+                logMessage("#### SERVICE CONNECTED");
                 srv = IPredatoidSrv.Stub.asInterface(obj);
                 if (srv == null) {
                     log_err("failed to get service interface");
@@ -166,46 +166,40 @@ public class Predatoid extends Activity {
                 try {
 
                     obj.linkToDeath(bdeath, 0);
-                    if (startfile != null) {	// we've been called via intent.VIEW
-                        log_msg("connection using " + startfile);
-                        File f = new File(startfile);
-                        if (f.exists() && !f.isDirectory()) {
-                            int i = startfile.lastIndexOf('/');
-                            f = new File(startfile.substring(0, i));
-                            if (setAdapter() && i > 0) {
-                                log_msg("starting from \"" + startfile + "\" in \"" + f.toString() + "\"");
-                                srv.registerCallback(cBack);
-                                update_headset_mode(null);
-//                                playDir(f, startfile);
-                                return;
-                            }
+
+                    logMessage("#### ADAPTER SET");
+                    fileList.setSelection(0);
+                    boolean lastPlayedTrackInfoIsComplete = (prefs.lastPlayedFile != null && (new File(prefs.lastPlayedFile)).exists()
+                            && prefs.lastPlayedAlbumID != 0);
+                    if (prefs.resumeLastTrackPlayed && lastPlayedTrackInfoIsComplete && !srv.isRunning()) {
+                        currDisplayedAlbumID = currPlayingAlbumID = prefs.lastPlayedAlbumID;
+
+                        if (!setAdapterFromAlbum()) {
+                            log_err("cannot set adapter from album!!");
+                            return;
                         }
-                        throw new NullPointerException();
-                    }
-                    String s = srv.getCurrentDirectory();
-                    if (s != null) {
-                        File f = new File(s);
+
+                        logMessage("resume last played");
+
+                        canGoBack = true;
+                        currentTrack = prefs.lastPlayedPosition;
+                        pauseOnStart = false;
+                        playContents(prefs.lastPlayedFile, filesToPlay, songNames, prefs.lastPlayedPosition, prefs.lastPlayedTime);
+                        TrackTimeUpdater ttu = new TrackTimeUpdater();
+                        ttu.start(songNames.get(currentTrack));
+                        new SendSrvCmd().execute(SendSrvCmd.cmd_hilight_item);
+
+                    } else {
+                        if (!setAdapterFromMedia()) {
+                            log_err("cannot set adapter from media!!!");
+                        }
+                        cBack.playItemChanged(true, getString(R.string.strStopped), 0);
                     }
 
-                    if (s == null) {
-
-                        if (!setAdapter()) {
-                            log_err("cannot set default adapter!!!");
-                        }
-                        fileList.setSelection(0);
-                        if (prefs.lastPlayedFile != null && (new File(prefs.lastPlayedFile)).exists() && !srv.isRunning()) {
-                            log_msg("bookmarked, starting from paused state");
-                            cBack.playItemChanged(true, getString(R.string.strPaused), 0);
-                            pauseOnStart = true;
-                            buttPause.setBackgroundDrawable(getResources().getDrawable(R.drawable.s_play));
-                        } else {
-                            cBack.playItemChanged(true, getString(R.string.strStopped), 0);
-                        }
-                    }
                     srv.registerCallback(cBack);
                     update_headset_mode(null);
                 } catch (RemoteException e) {
-                    log_msg("remote exception in onServiceConnected: " + e.toString());
+                    logMessage("remote exception in onServiceConnected: " + e.toString());
                 }
                 //	Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO);
             }
@@ -335,7 +329,7 @@ public class Predatoid extends Activity {
             }
             prefs.save();
             if (conn != null) {
-                log_msg("unbinding service");
+                logMessage("unbinding service");
                 unbindService(conn);
                 conn = null;
             }
@@ -347,7 +341,7 @@ public class Predatoid extends Activity {
         if (!stopService(intie)) {
             log_err("service not stopped");
         } else {
-            log_msg("service stopped");
+            logMessage("service stopped");
         }
         finish();
         android.os.Process.killProcess(android.os.Process.myPid());
@@ -359,23 +353,6 @@ public class Predatoid extends Activity {
                 return;
             }
             v.startAnimation(AnimationUtils.loadAnimation(getApplicationContext(), R.anim.blink));
-//            File path = cur_album_id.getParentFile();
-//            if (path != null) {
-//                int k = cur_album_id.toString().lastIndexOf('/');
-//                String lastPath = cur_album_id.toString().substring(k + 1);
-//                if (setAdapter(path)) {
-//                    for (k = 0; k < albumEntries.size(); k++) {
-//                        if (albumEntries.get(k).getTopText().compareTo(lastPath) == 0) {
-//                            break;
-//                        }
-//                    }
-//                    fileList.setSelection(k);
-//                } else {
-//                    log_err("cannot restore in onButtUp()");
-//                }
-//            }
-
-
         }
     };
     OnSeekBarChangeListener onSeekBar = new OnSeekBarChangeListener() {
@@ -391,11 +368,9 @@ public class Predatoid extends Activity {
 
         public void onStopTrackingTouch(SeekBar seekBar) {
             try {
-                if (srv.getCurrentMode() == 0) {
-                    srv.seekTo(seekBar.getProgress() * 1000);
-                } else {
-                    srv.play(srv.getCurrentPosition(), seekBar.getProgress());
-                }
+
+                srv.seekTo(seekBar.getProgress() * 1000);
+
             } catch (Exception e) {
                 // TODO Auto-generated catch block
                 e.printStackTrace();
@@ -407,21 +382,6 @@ public class Predatoid extends Activity {
         if (currDisplayedAlbumID == 0) {
             return;
         }
-//        File path = cur_album_id.getParentFile();
-//        if (path != null) {
-//            int k = cur_album_id.toString().lastIndexOf('/');
-//            String lastPath = cur_album_id.toString().substring(k + 1);
-//            if (setAdapter(path)) {
-//                for (k = 0; k < albumEntries.size(); k++) {
-//                    if (albumEntries.get(k).getTopText().compareTo(lastPath) == 0) {
-//                        break;
-//                    }
-//                }
-//                fileList.setSelection(k);
-//            } else {
-//                log_err("cannot restore in onButtUp()");
-//            }
-//        }
     }
 
     // Load the server playlist with contents of arrays, and play starting from the k-th item @ time start.
@@ -485,7 +445,7 @@ public class Predatoid extends Activity {
             String g = s + String.format(":%d:%d", seconds, index);
             writer.write(g);
             writer.close();
-            log_msg("Saving bookmark: " + book_file.toString() + ": " + g);
+            logMessage("Saving bookmark: " + book_file.toString() + ": " + g);
         } catch (Exception e) {
             log_err("exception in saveBook: " + e.toString());
         }
@@ -578,7 +538,7 @@ public class Predatoid extends Activity {
                             if (srv == null) {
                                 return;
                             }
-                            if (!pBar.isPressed()) {
+                            if (!progressBar.isPressed()) {
                                 try {
                                     if (!srv.isRunning() || srv.isPaused()) {
                                         return;
@@ -595,7 +555,7 @@ public class Predatoid extends Activity {
                                         curWindowTitle = (track_time < 3600) ? String.format("[%d:%02d] %s", track_time / 60, track_time % 60, track_name)
                                                 : String.format("[%d:%02d:%02d] %s", track_time / 3600, (track_time % 3600) / 60, track_time % 60, track_name);
                                         getWindow().setTitle(curWindowTitle);
-                                        pBar.setMax(track_time);
+                                        progressBar.setMax(track_time);
                                         String sTime = (track_time < 3600) ? String.format("%d:%02d", track_time / 60, track_time % 60)
                                                 : String.format("%d:%02d:%02d", track_time / 3600, (track_time % 3600) / 60, track_time % 60);
                                         allTime.setText(sTime);
@@ -604,7 +564,7 @@ public class Predatoid extends Activity {
                                     //	pBar.setProgress(srv.getCurrentSeconds() - PredatoidSrv.currentTrackStart);
                                     int progress = srv.getCurrentSeconds() - srv.getCurrentTrackStart();
                                     if (progress > 0) {
-                                        pBar.setProgress(progress);
+                                        progressBar.setProgress(progress);
                                     }
                                     String sTime = (srv.getCurrentSeconds() < 3600) ? String.format("%d:%02d", progress / 60, progress % 60)
                                             : String.format("%d:%02d:%02d", progress / 3600, (progress % 3600) / 60, progress % 60);
@@ -623,13 +583,13 @@ public class Predatoid extends Activity {
                         if (srv == null) {
                             return;
                         }
-                        if (!pBar.isPressed()) {
+                        if (!progressBar.isPressed()) {
                             try {
                                 //	int track_time = PredatoidSrv.currentTrackLength;
                                 int track_time = srv.getCurrentTrackLength();
                                 need_update = false;
                                 if (track_time <= 0) {
-                                    log_msg("progressUpdate(): fishy track_time " + track_time);
+                                    logMessage("progressUpdate(): fishy track_time " + track_time);
                                     track_time = srv.getTrackDuration();
                                     if (track_time <= 0) {
                                         need_update = true;
@@ -639,7 +599,7 @@ public class Predatoid extends Activity {
                                         : String.format("[%d:%02d:%02d] %s", track_time / 3600, (track_time % 3600) / 60, track_time % 60, track_name);
 
                                 getWindow().setTitle(curWindowTitle);
-                                pBar.setMax(track_time);
+                                progressBar.setMax(track_time);
                                 String sTime = (track_time < 3600) ? String.format("%d:%02d", track_time / 60, track_time % 60)
                                         : String.format("%d:%02d:%02d", track_time / 3600, (track_time % 3600) / 60, track_time % 60);
                                 allTime.setText(sTime);
@@ -751,7 +711,7 @@ public class Predatoid extends Activity {
 
         // getting settings
         SharedPreferences settings = PreferenceManager.getDefaultSharedPreferences(getBaseContext());
-        boolean shuffleMode = settings.getBoolean("shuffle_mode", false);
+        boolean resumeLastTrackPlayed = settings.getBoolean("resume_last_track_played", false);
         boolean loopMode = settings.getBoolean("loop_mode", false);
         boolean bookMode = settings.getBoolean("book_mode", false);
         boolean loginToPredatum = settings.getBoolean("login_to_predatum", false);
@@ -768,13 +728,11 @@ public class Predatoid extends Activity {
         } else {
             prefs.loginToPredatum = false;
         }
-        if (shuffleMode != prefs.shuffle) {
-            playlistChanged = true;
-        }
-        if (shuffleMode) {
-            prefs.shuffle = true;
+
+        if (resumeLastTrackPlayed) {
+            prefs.resumeLastTrackPlayed = true;
         } else {
-            prefs.shuffle = false;
+            prefs.resumeLastTrackPlayed = false;
         }
         if (loopMode) {
             prefs.loopMode = true;
@@ -848,9 +806,9 @@ public class Predatoid extends Activity {
         intie.setClassName("com.predatum", "com.predatum.PredatoidSrv");
 
         if (startService(intie) == null) {
-            log_msg("service not started");
+            logMessage("service not started");
         } else {
-            log_msg("started service");
+            logMessage("started service");
         }
 
         if (conn == null) {
@@ -875,7 +833,7 @@ public class Predatoid extends Activity {
         if (!getApplicationContext().bindService(intie, conn, 0)) {
             log_err("cannot bind service");
         } else {
-            log_msg("service bound");
+            logMessage("service bound");
         }
 
     }
@@ -893,7 +851,7 @@ public class Predatoid extends Activity {
             }
         }
         if (conn != null) {
-            log_msg("unbinding service");
+            logMessage("unbinding service");
             getApplicationContext().unbindService(conn);
             conn = null;
         }
@@ -914,17 +872,18 @@ public class Predatoid extends Activity {
         public String lastPlayedFile;
         public String loginUserName;
         public String loginPassword;
-        public boolean shuffle;
+        public boolean resumeLastTrackPlayed;
         public boolean loopMode;
         public boolean savebooks;
         public boolean loginToPredatum;
         public int headsetMode;
         public int lastPlayedPosition;
         public int lastPlayedTime;
+        public int lastPlayedAlbumID;
 
         public void load() {
             SharedPreferences shpr = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-            shuffle = shpr.getBoolean("shuffle", false);
+            resumeLastTrackPlayed = shpr.getBoolean("resume_last_track_played", false);
             savebooks = shpr.getBoolean("save_books", false);
             loginToPredatum = shpr.getBoolean("login_to_predatum", false);
             loopMode = shpr.getBoolean("loop_mode", false);
@@ -932,6 +891,7 @@ public class Predatoid extends Activity {
             lastPlayedFile = shpr.getString("last_played_file", null);
             lastPlayedPosition = shpr.getInt("last_played_pos", 0);
             lastPlayedTime = shpr.getInt("last_played_time", 0);
+            lastPlayedAlbumID = shpr.getInt("last_played_album_id", 0);
             plistPath = shpr.getString("plist_path", Environment.getExternalStorageDirectory().toString());
             plistName = shpr.getString("plist_name", "Favorites");
             loginUserName = shpr.getString("login_username", null);
@@ -949,7 +909,7 @@ public class Predatoid extends Activity {
         public void save() {
             SharedPreferences shpr = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
             SharedPreferences.Editor editor = shpr.edit();
-            editor.putBoolean("shuffle", shuffle);
+            editor.putBoolean("resume_last_track_played", resumeLastTrackPlayed);
             editor.putBoolean("save_books", savebooks);
             editor.putBoolean("loop_mode", loopMode);
             editor.putBoolean("hs_remove_mode", (headsetMode & PredatoidSrv.HANDLE_HEADSET_REMOVE) != 0);
@@ -970,6 +930,7 @@ public class Predatoid extends Activity {
                 editor.putString("last_played_file", lastPlayedFile);
                 editor.putInt("last_played_pos", lastPlayedPosition);
                 editor.putInt("last_played_time", lastPlayedTime);
+                editor.putInt("last_played_album_id", currPlayingAlbumID);
             }
             if (!editor.commit()) {
                 showMsg(getString(R.string.strErrPrefs));
@@ -1000,8 +961,8 @@ public class Predatoid extends Activity {
         fileList = (ListView) findViewById(R.id.FileList);
         nowTime = (TextView) findViewById(R.id.nowTime);
         allTime = (TextView) findViewById(R.id.allTime);
-        pBar = (SeekBar) findViewById(R.id.PBar);
-        pBar.setOnSeekBarChangeListener(onSeekBar);
+        progressBar = (SeekBar) findViewById(R.id.PBar);
+        progressBar.setOnSeekBarChangeListener(onSeekBar);
         buttPause.setOnClickListener(onButtPause);
         buttPrev.setOnClickListener(onButtPrev);
         buttNext.setOnClickListener(onButtNext);
@@ -1011,10 +972,11 @@ public class Predatoid extends Activity {
         try {
             if (srv != null && srv.isRunning()) //pBar.setMax(PredatoidSrv.currentTrackLength);
             {
-                pBar.setMax(srv.getCurrentTrackLength());
+                progressBar.setMax(srv.getCurrentTrackLength());
+
             }
         } catch (RemoteException e) {
-            log_err("remote exception in setContent()");
+            log_err("remote exception in setContent");
         }
     }
 
