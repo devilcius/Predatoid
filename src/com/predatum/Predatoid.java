@@ -6,6 +6,7 @@ import java.io.FileWriter;
 import java.util.ArrayList;
 import java.util.Timer;
 import java.util.TimerTask;
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.ComponentName;
@@ -18,6 +19,7 @@ import android.content.res.Configuration;
 import android.database.Cursor;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
+import android.net.ParseException;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
@@ -60,7 +62,7 @@ public class Predatoid extends Activity {
     private int currDisplayedAlbumID = 0;
     // Currently "opened" album id
     private int currPlayingAlbumID = 0;
-    // File/dir names together with their icons displayed in the list widget
+    // File/directory names together with their icons displayed in the list widget
     private ArrayList<IconifiedText> albumEntries = new ArrayList<IconifiedText>();
     // List of tracks
     private ArrayList<IconifiedText> trackEntries = new ArrayList<IconifiedText>();
@@ -74,8 +76,6 @@ public class Predatoid extends Activity {
     //currentTrack playing or paused
     private int currentTrack = 0;
     private boolean pauseOnStart = false;
-    // Changed to true in playlists/settings dialogs
-    private boolean resumeLastTrackPlayed = false;
     //Phone's back button go back to previous item list
     private boolean canGoBack = false;
 
@@ -86,7 +86,7 @@ public class Predatoid extends Activity {
     private void log_err(String msg) {
         Log.e(getClass().getSimpleName(), msg);
     }
-    // UI elements defined in layout xml file.
+    // UI elements defined in layout XML file.
     private Button buttPause, buttPrev, buttNext, buttVMinus, buttVPlus, ButtonVolume;
     private TextView nowTime, allTime;
     private ListView fileList;
@@ -422,7 +422,6 @@ public class Predatoid extends Activity {
 
     void saveBook() {
         try {
-            int i;
             File book_file;
             String s = srv.getCurrentDirectory();
 
@@ -483,9 +482,6 @@ public class Predatoid extends Activity {
 
         }
     };
-    // If a playlist or cue was long-pressed, its contents are sent to server, and playback
-    // starts immediately without changing into that playlist.
-    private int cur_longpressed = 0;
     AdapterView.OnItemLongClickListener pressItem = new OnItemLongClickListener() {
 
         public boolean onItemLongClick(AdapterView<?> a, View v, int i, long k) {
@@ -499,7 +495,6 @@ public class Predatoid extends Activity {
                 return false;
             }
             File f = new File(files.get((int) k));
-            cur_longpressed = (int) k;
             if (!f.exists()) {
                 log_err("non-existing item long-pressed in the list!");
                 return false;
@@ -679,7 +674,8 @@ public class Predatoid extends Activity {
             showMsg(curfile);
         }
     };
-    Handler pauseResumeHandler = new Handler() {
+    @SuppressLint("HandlerLeak")
+	Handler pauseResumeHandler = new Handler() {
 
         private String nowPlaying = null;
 
@@ -1023,19 +1019,10 @@ public class Predatoid extends Activity {
         errExit(getString(resource));
     }
 
-    // displays adapter list.
-    private boolean setAdapter() {
-        if (currDisplayedAlbumID == 0) {
-            return setAdapterFromMedia();
-        } else {
-            return setAdapterFromAlbum();
-        }
-    }
-
     private boolean setAdapterFromMedia() {
         try {
 
-            ArrayList<HashMap> sdcardMusic = new ArrayList<HashMap>();
+            ArrayList<HashMap<String, Object>> sdcardMusic = new ArrayList<HashMap<String, Object>>();
             ContentResolver resolver = getBaseContext().getContentResolver();
             Cursor cursor = resolver.query(MediaStore.Audio.Albums.EXTERNAL_CONTENT_URI, new String[]{"ALBUM", "ARTIST", "NUMSONGS", "_id", "MINYEAR"}, null, null, "ARTIST");
 
@@ -1045,7 +1032,7 @@ public class Predatoid extends Activity {
             } else {
                 while (cursor.moveToNext()) {
 
-                    HashMap album = new HashMap();
+                    HashMap<String, Object> album = new HashMap<String, Object>();
 
                     album.put("album", cursor.getString(0));
                     album.put("artist", cursor.getString(1));
@@ -1087,7 +1074,7 @@ public class Predatoid extends Activity {
     private boolean setAdapterFromAlbum() {
         try {
 
-            ArrayList<HashMap> trackList = new ArrayList<HashMap>();
+            ArrayList<HashMap<String, Object>> trackList = new ArrayList<HashMap<String, Object>>();
             ContentResolver resolver = getBaseContext().getContentResolver();
             Cursor cursor = resolver.query(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, new String[]{"ALBUM", "ARTIST", "YEAR", "TITLE", "TRACK", "_display_name", "_data", "_size", "duration"}, "album_id=" + currDisplayedAlbumID, null, "TRACK");
             int trackNum = 1;
@@ -1095,7 +1082,7 @@ public class Predatoid extends Activity {
             songNames.clear();
             while (cursor.moveToNext()) {
 
-                HashMap song = new HashMap();
+                HashMap<String, Object> song = new HashMap<String, Object>();
 
                 song.put("album", cursor.getString(0));
                 song.put("artist", cursor.getString(1));
@@ -1104,11 +1091,14 @@ public class Predatoid extends Activity {
                 song.put("track", trackNum);
                 song.put("filename", cursor.getString(5));
                 song.put("file_path", cursor.getString(6));
-                SongExtraInfo songExtraInfo = new SongExtraInfo();
-                song.put("genre", songExtraInfo.getSongGenre(new File(cursor.getString(6))));
                 song.put("file_size", cursor.getString(7));
-                song.put("duration", cursor.getString(8));
-
+                song.put("duration", (Integer.parseInt(cursor.getString(8))) / 1000);                
+                SongExtraInfo songExtraInfo = new SongExtraInfo(new File(cursor.getString(6)));
+                song.put("genre", songExtraInfo.getSongGenre());
+                song.put("lame_encoded", songExtraInfo.isLameEncoded());
+                song.put("quality", songExtraInfo.getLamePreset());
+                song.put("bitrate", songExtraInfo.getBitrate());
+                
                 trackList.add(song);
 
                 //fills list of files path of current playlist
@@ -1149,9 +1139,9 @@ public class Predatoid extends Activity {
 
     private String songDurationFormat(Long songDuration) {
         return String.format("%d:%02d ",
-                TimeUnit.MILLISECONDS.toMinutes(songDuration),
+        		(int) ((songDuration / (1000*60)) % 60),
                 TimeUnit.MILLISECONDS.toSeconds(songDuration)
-                - TimeUnit.MINUTES.toSeconds(TimeUnit.MILLISECONDS.toMinutes(songDuration)));
+                - (60 * (int) ((songDuration / (1000*60)) % 60)));
 
     }
 }

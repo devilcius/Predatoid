@@ -6,23 +6,60 @@ import org.jaudiotagger.audio.AudioFile;
 import org.jaudiotagger.audio.AudioFileIO;
 import org.jaudiotagger.tag.FieldKey;
 import org.jaudiotagger.tag.Tag;
+import org.jaudiotagger.audio.mp3.MP3AudioHeader;
 
 /**
- *
- * @author marcos
+ * 
+ * @author Marcos
  */
 public class SongExtraInfo {
 
-    public String getSongGenre(File file) {
-        String genre = "";
-        try {
-            AudioFile f = AudioFileIO.read(file);
-            Tag tag = f.getTag();
-            genre = tag.getFirst(FieldKey.GENRE);
-        } catch (Exception e) {
-            Log.e(getClass().getName(), "", e);
-        }
+	private AudioFile audioFile;
+	private MP3AudioHeader audioHeader;
+	private final String LAME_ID = "LAME";
 
-        return genre;
-    }
+	public SongExtraInfo(File file) {
+		try {
+			audioFile = AudioFileIO.read(file);
+			audioHeader = (MP3AudioHeader) audioFile.getAudioHeader();
+		} catch (Exception exception) {
+			Log.e(getClass().getName(), "", exception);
+		}
+
+	}
+
+	public String getSongGenre() {
+
+		Tag tag = audioFile.getTag();
+		return tag.getFirst(FieldKey.GENRE);
+
+	}
+	
+	public String getBitrate() {
+
+		return audioHeader.getBitRate();
+
+	}	
+	
+	public boolean isLameEncoded() {
+		
+		return audioHeader.getEncoder().substring(0, 4).equals(LAME_ID);
+	}
+
+	public String getLamePreset() {
+		String preset = null;
+		if(this.isLameEncoded())
+		{
+			if(audioHeader.isVariableBitRate())
+			{
+				preset =  audioHeader.getPreset();				
+			}
+			else
+			{
+				preset = audioHeader.getBitRate();
+			}
+
+		}
+		return preset;
+	}
 }
