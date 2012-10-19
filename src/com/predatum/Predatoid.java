@@ -3,10 +3,12 @@ package com.predatum;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
+import java.io.IOException;
 import java.text.Format;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
 import android.annotation.SuppressLint;
@@ -22,7 +24,6 @@ import android.content.res.Configuration;
 import android.database.Cursor;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
-import android.net.ParseException;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
@@ -59,6 +60,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import org.apache.http.client.ClientProtocolException;
+
 public class Predatoid extends Activity {
 
 	private final String DEFAULT_AUDIO_FILE_TYPE = "MP3";
@@ -75,12 +78,11 @@ public class Predatoid extends Activity {
 	private ArrayList<String> files = new ArrayList<String>();
 	// Full paths to files in current playlist
 	private ArrayList<String> filesToPlay = new ArrayList<String>();
-	// Current song playing with all its meta data
-	HashMap<String, Object> song = new HashMap<String, Object>();
 	// Track names to be displayed in status bar
 	private ArrayList<String> songNames = new ArrayList<String>();
-	// At the start, set this flag and emulate the pause if the last file was
-	// bookmarked
+	// Current track list
+	private ArrayList<HashMap<String, Object>> trackList = new ArrayList<HashMap<String, Object>>();
+
 	// currentTrack playing or paused
 	private int currentTrack = 0;
 	private boolean pauseOnStart = false;
@@ -96,8 +98,7 @@ public class Predatoid extends Activity {
 	}
 
 	// UI elements defined in layout XML file.
-	private Button buttPause, buttPrev, buttNext, buttVMinus, buttVPlus,
-			ButtonVolume;
+	private Button buttPause, buttPrev, buttNext;
 	private TextView nowTime, allTime;
 	private ListView fileList;
 	private SeekBar progressBar;
@@ -113,7 +114,7 @@ public class Predatoid extends Activity {
 	private IPredatoidSrvCallback cBack = new IPredatoidSrvCallback.Stub() {
 
 		public void playItemChanged(boolean error, String name,
-				final int trackNum) {
+				final int trackNum, Map songMetaData) {
 			logMessage(String.format("track name changed to %s", name));
 			Message msg = new Message();
 			Bundle data = new Bundle();
@@ -124,6 +125,31 @@ public class Predatoid extends Activity {
 			if (fileList.getChildCount() > 0) {
 				currentTrack = trackNum;
 				new SendSrvCmd().execute(SendSrvCmd.cmd_hilight_item);
+			}
+			
+			
+			final HashMap<String, Object> songToPost = (HashMap<String, Object>) songMetaData; 
+
+			if (prefs.loginToPredatum && trackList != null
+					&& trackList.size() > 0) {
+				runOnUiThread(new Runnable() {
+					@SuppressWarnings("unchecked")
+					public void run() {
+						songToPost.put("action", "play");						
+						Predatum predatum = new Predatum();
+						try {
+							predatum.updateNowPlaying(
+									songToPost,
+									getApplicationContext());
+						} catch (ClientProtocolException e) {
+							// TODO Auto-generated catch block
+							e.printStackTrace();
+						} catch (IOException e) {
+							// TODO Auto-generated catch block
+							e.printStackTrace();
+						}
+					}
+				});
 			}
 		}
 
@@ -202,7 +228,7 @@ public class Predatoid extends Activity {
 						pauseOnStart = false;
 						playContents(prefs.lastPlayedFile, filesToPlay,
 								songNames, prefs.lastPlayedPosition,
-								prefs.lastPlayedTime);
+								prefs.lastPlayedTime, trackList);
 						TrackTimeUpdater ttu = new TrackTimeUpdater();
 						ttu.start(songNames.get(currentTrack));
 						new SendSrvCmd().execute(SendSrvCmd.cmd_hilight_item);
@@ -211,8 +237,9 @@ public class Predatoid extends Activity {
 						if (!setAdapterFromMedia()) {
 							log_err("cannot set adapter from media!!!");
 						}
-						cBack.playItemChanged(true,
-								getString(R.string.strStopped), 0);
+						// cBack.playItemChanged(true,
+						// getString(R.string.strStopped), 0, trackList.size() >
+						// 0? trackList.get(currentTrack) : null);
 					}
 
 					srv.registerCallback(cBack);
@@ -248,6 +275,23 @@ public class Predatoid extends Activity {
 				switch (func[0]) {
 				case cmd_pause:
 					if (pauseOnStart) {
+						runOnUiThread(new Runnable() {
+							public void run() {
+								HashMap<String, Object> post = new HashMap<String, Object>();
+								post.put("action", "pause");
+								Predatum predatum = new Predatum();
+								try {
+									predatum.updateNowPlaying(post,
+											getApplicationContext());
+								} catch (ClientProtocolException e) {
+									// TODO Auto-generated catch block
+									e.printStackTrace();
+								} catch (IOException e) {
+									// TODO Auto-generated catch block
+									e.printStackTrace();
+								}
+							}
+						});
 						return change_to_pause_btn;
 					}
 					if (srv.isPaused()) {
@@ -267,9 +311,43 @@ public class Predatoid extends Activity {
 									nowPlaying = nowPlaying.substring(i + 1);
 								}
 							}
+							runOnUiThread(new Runnable() {
+								public void run() {
+									HashMap<String, Object> post = new HashMap<String, Object>();
+									post.put("action", "unpause");
+									Predatum predatum = new Predatum();
+									try {
+										predatum.updateNowPlaying(post,
+												getApplicationContext());
+									} catch (ClientProtocolException e) {
+										// TODO Auto-generated catch block
+										e.printStackTrace();
+									} catch (IOException e) {
+										// TODO Auto-generated catch block
+										e.printStackTrace();
+									}
+								}
+							});
 							return change_to_pause_btn;
 						}
 					} else if (srv.pause()) {
+						runOnUiThread(new Runnable() {
+							public void run() {
+								HashMap<String, Object> post = new HashMap<String, Object>();
+								post.put("action", "pause");
+								Predatum predatum = new Predatum();
+								try {
+									predatum.updateNowPlaying(post,
+											getApplicationContext());
+								} catch (ClientProtocolException e) {
+									// TODO Auto-generated catch block
+									e.printStackTrace();
+								} catch (IOException e) {
+									// TODO Auto-generated catch block
+									e.printStackTrace();
+								}
+							}
+						});
 						return change_to_play_btn;
 					}
 					break;
@@ -423,7 +501,7 @@ public class Predatoid extends Activity {
 	// Load the server playlist with contents of arrays, and play starting from
 	// the k-th item @ time start.
 	private boolean playContents(String fpath, ArrayList<String> audioFiles,
-			ArrayList<String> songs, int trackNum, int startPos) {
+			ArrayList<String> songs, int trackNum, int startPos, ArrayList<HashMap<String, Object>> tracks) {
 		try {
 			if (!srv.initPlaylist(fpath, audioFiles.size())) {
 				log_err("failed to initialize new playlist on server");
@@ -433,7 +511,8 @@ public class Predatoid extends Activity {
 			}
 			for (int i = 0; i < audioFiles.size(); i++) {
 				if (!srv.addToPlaylist(audioFiles.get(i),
-						(songs != null) ? songs.get(i) : null, 0, i)) {
+						(songs != null) ? songs.get(i) : null, 0, i,
+						(tracks != null) ? tracks.get(i) : null)) {
 					log_err("failed to add a file to server playlist");
 					Toast.makeText(getApplicationContext(),
 							R.string.strSrvFail, Toast.LENGTH_SHORT).show();
@@ -446,11 +525,6 @@ public class Predatoid extends Activity {
 						Toast.LENGTH_SHORT).show();
 				log_err("failed to start playing <contents>");
 				return false;
-			} else {
-				if (prefs.loginToPredatum) {
-					song.put("action", "play");
-					Predatum.getInstance().postSong(song, this);
-				}	
 			}
 			if (!pauseOnStart) {
 				buttPause.setBackgroundDrawable(getResources().getDrawable(
@@ -512,7 +586,7 @@ public class Predatoid extends Activity {
 				setAdapterFromAlbum();
 				try {
 					if (!srv.isRunning()) {
-						playContents(startfile, filesToPlay, songNames, 0, 0);
+						playContents(startfile, filesToPlay, songNames, 0, 0, trackList);
 						currentTrack = 0;
 						currPlayingAlbumID = iconifiedText.getAlbumID();
 					}
@@ -522,7 +596,7 @@ public class Predatoid extends Activity {
 				}
 				canGoBack = true;
 			} else {
-				playContents(startfile, filesToPlay, songNames, i, 0);
+				playContents(startfile, filesToPlay, songNames, i, 0, trackList);
 				currentTrack = i;
 				currPlayingAlbumID = iconifiedText.getAlbumID();
 			}
@@ -1066,8 +1140,6 @@ public class Predatoid extends Activity {
 		buttPause = (Button) findViewById(R.id.ButtonPause);
 		buttPrev = (Button) findViewById(R.id.ButtonPrev);
 		buttNext = (Button) findViewById(R.id.ButtonNext);
-
-		ButtonVolume = (Button) findViewById(R.id.ButtonVolume);
 		fileList = (ListView) findViewById(R.id.FileList);
 		nowTime = (TextView) findViewById(R.id.nowTime);
 		allTime = (TextView) findViewById(R.id.allTime);
@@ -1197,7 +1269,7 @@ public class Predatoid extends Activity {
 	private boolean setAdapterFromAlbum() {
 		try {
 
-			ArrayList<HashMap<String, Object>> trackList = new ArrayList<HashMap<String, Object>>();
+			trackList = new ArrayList<HashMap<String, Object>>();
 			ContentResolver resolver = getBaseContext().getContentResolver();
 			Cursor cursor = resolver.query(
 					MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, new String[] {
@@ -1207,8 +1279,10 @@ public class Predatoid extends Activity {
 			int trackNum = 1;
 			filesToPlay.clear();
 			songNames.clear();
+			trackList.clear();
 			while (cursor.moveToNext()) {
 
+				HashMap<String, Object> song = new HashMap<String, Object>();
 				song.put("album", cursor.getString(0));
 				song.put("artist", cursor.getString(1));
 				song.put("year", cursor.getInt(2));
@@ -1252,7 +1326,6 @@ public class Predatoid extends Activity {
 						+ cursor.getString(1));
 
 				trackNum++;
-
 			}
 
 			cursor.close();
@@ -1268,7 +1341,7 @@ public class Predatoid extends Activity {
 						+ " - "
 						+ trackList.get(i).get("title"),
 						songDurationFormat(Long.parseLong(trackList.get(i)
-								.get("duration").toString()))
+								.get("duration").toString()) * 1000)
 								+ " :: " + trackList.get(i).get("genre"),
 						songIcon, currDisplayedAlbumID, false));
 			}
