@@ -41,7 +41,7 @@ public class PredatoidSrv extends Service {
 		Log.i(getClass().getSimpleName(), msg);
 	}
 
-	private void log_err(String msg) {
+	private void logErrorMessage(String msg) {
 		Log.e(getClass().getSimpleName(), msg);
 	}
 
@@ -77,7 +77,7 @@ public class PredatoidSrv extends Service {
 					}
 				}
 			} catch (RemoteException e) {
-				log_err("remote exception in informTrack(): " + e.toString());
+				logErrorMessage("remote exception in informTrack(): " + e.toString());
 				break;
 			}
 		}
@@ -90,7 +90,7 @@ public class PredatoidSrv extends Service {
 			try {
 				cBacks.getBroadcastItem(i).playItemPaused(pause);
 			} catch (RemoteException e) {
-				log_err("remote exception in informPauseResume(): "
+				logErrorMessage("remote exception in informPauseResume(): "
 						+ e.toString());
 				break;
 			}
@@ -121,7 +121,7 @@ public class PredatoidSrv extends Service {
 						}
 						mplayer = null;
 					}
-					log_err("mplayer playback aborted with errors: " + what
+					logErrorMessage("mplayer playback aborted with errors: " + what
 							+ ", " + extra);
 					informTrack(getString(R.string.strMplayerError), true, null);
 					synchronized (mplayer_lock) {
@@ -156,7 +156,7 @@ public class PredatoidSrv extends Service {
 				mplayer_lock.wait();
 			}
 		} catch (Exception e) {
-			log_err("Exception in extPlay(): " + e.toString());
+			logErrorMessage("Exception in extPlay(): " + e.toString());
 		} finally {
 			synchronized (mplayer_lock) {
 				if (mplayer != null) {
@@ -228,7 +228,7 @@ public class PredatoidSrv extends Service {
 				times = new int[items];
 				trackList = new ArrayList<HashMap<String, Object>>(items);
 			} catch (Exception e) {
-				log_err("exception in initPlaylist(): " + e.toString());
+				logErrorMessage("exception in initPlaylist(): " + e.toString());
 				return false;
 			}
 			return true;
@@ -252,7 +252,7 @@ public class PredatoidSrv extends Service {
 				times[pos] = start_time;
 				trackList.add(pos, songMetaData);
 			} catch (Exception e) {
-				log_err("exception in add_to_playlist(): " + e.toString());
+				logErrorMessage("exception in add_to_playlist(): " + e.toString());
 				return false;
 			}
 			return true;
@@ -323,7 +323,7 @@ public class PredatoidSrv extends Service {
 
 							nm.cancel(NOTIFY_ID);
 						} catch (Exception e) {
-							log_err("run(): exception in xxxPlay(): "
+							logErrorMessage("run(): exception in xxxPlay(): "
 									+ e.toString());
 							currentStart = 0;
 							continue;
@@ -333,7 +333,7 @@ public class PredatoidSrv extends Service {
 							logMessage(Process.myTid()
 									+ ": xxxPlay() returned normally");
 						} else {
-							log_err(String.format(
+							logErrorMessage(String.format(
 									"run(): xxxPlay() returned error %d", k));
 							running = false;
 							String err, s[] = getResources().getStringArray(
@@ -397,20 +397,21 @@ public class PredatoidSrv extends Service {
 						thread.join(100);
 						k++;
 						if (thread.isAlive()) {
-							SystemClock.sleep(50);
+							SystemClock.sleep(1);
 						} else {
 							break;
 						}
-						if (k > 20) {
+						if (k > 2) {
 							break;
 						}
 					}
 				} catch (InterruptedException e) {
-					log_err("Interrupted exception in stop(): " + e.toString());
+					logErrorMessage("Interrupted exception in stop(): " + e.toString());
 				}
 				if (thread.isAlive()) {
-					log_err(String.format(
-							"stop(): thread %d is still alive after %d ms",
+					thread.interrupt();
+					logMessage(String.format(
+							"stop(): thread %d interrupted after %d ms",
 							tid, k * 100));
 				} else {
 					logMessage(String.format(
@@ -468,7 +469,7 @@ public class PredatoidSrv extends Service {
 				try {
 					mplayer.pause();
 				} catch (Exception e) {
-					log_err("Mplayer exception in pause(): " + e.toString());
+					logErrorMessage("Mplayer exception in pause(): " + e.toString());
 					paused = false;
 				}
 			} else {
@@ -493,7 +494,7 @@ public class PredatoidSrv extends Service {
 				try {
 					mplayer.start();
 				} catch (Exception e) {
-					log_err("Mplayer exception in resume(): " + e.toString());
+					logErrorMessage("Mplayer exception in resume(): " + e.toString());
 					paused = true;
 				}
 			} else {
@@ -849,7 +850,7 @@ public class PredatoidSrv extends Service {
 			os.flush();
 			process.waitFor();
 		} catch (Exception e) {
-			log_err("exception while setting device permissions: "
+			logErrorMessage("exception while setting device permissions: "
 					+ e.toString());
 			return false;
 		} finally {

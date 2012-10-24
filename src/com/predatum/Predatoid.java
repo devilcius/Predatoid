@@ -16,6 +16,7 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.ComponentName;
 import android.content.ContentResolver;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.ServiceConnection;
@@ -93,7 +94,7 @@ public class Predatoid extends Activity {
 		Log.i(getClass().getSimpleName(), msg);
 	}
 
-	private void log_err(String msg) {
+	private void logErrorMessage(String msg) {
 		Log.e(getClass().getSimpleName(), msg);
 	}
 
@@ -169,12 +170,12 @@ public class Predatoid extends Activity {
 	IBinder.DeathRecipient bdeath = new IBinder.DeathRecipient() {
 
 		public void binderDied() {
-			log_err("Binder died, trying to reconnect");
+			logErrorMessage("Binder died, trying to reconnect");
 			conn = newConnection();
 			Intent intie = new Intent();
 			intie.setClassName("com.predatum", "com.predatum.PredatoidSrv");
 			if (!stopService(intie)) {
-				log_err("service not stopped");
+				logErrorMessage("service not stopped");
 			}
 			if (startService(intie) == null) {
 				logMessage("service not started");
@@ -182,7 +183,7 @@ public class Predatoid extends Activity {
 				logMessage("started service");
 			}
 			if (!bindService(intie, conn, 0)) {
-				log_err("cannot bind service");
+				logErrorMessage("cannot bind service");
 			} else {
 				logMessage("service bound");
 			}
@@ -199,7 +200,7 @@ public class Predatoid extends Activity {
 				logMessage("#### SERVICE CONNECTED");
 				srv = IPredatoidSrv.Stub.asInterface(obj);
 				if (srv == null) {
-					log_err("failed to get service interface");
+					logErrorMessage("failed to get service interface");
 					errExit(R.string.strErrSrvIf);
 					return;
 				}
@@ -217,7 +218,7 @@ public class Predatoid extends Activity {
 						currDisplayedAlbumID = currPlayingAlbumID = prefs.lastPlayedAlbumID;
 
 						if (!setAdapterFromAlbum()) {
-							log_err("cannot set adapter from album!!");
+							logErrorMessage("cannot set adapter from album!!");
 							return;
 						}
 
@@ -235,7 +236,7 @@ public class Predatoid extends Activity {
 
 					} else {
 						if (!setAdapterFromMedia()) {
-							log_err("cannot set adapter from media!!!");
+							logErrorMessage("cannot set adapter from media!!!");
 						}
 						// cBack.playItemChanged(true,
 						// getString(R.string.strStopped), 0, trackList.size() >
@@ -298,10 +299,44 @@ public class Predatoid extends Activity {
 						if (srv.resume() && srv.isRunning()) {
 							nowPlaying = curWindowTitle;
 							if (nowPlaying != null) {
+								runOnUiThread(new Runnable() {
+									public void run() {
+										HashMap<String, Object> post = new HashMap<String, Object>();
+										post.put("action", "resume");
+										Predatum predatum = new Predatum();
+										try {
+											predatum.updateNowPlaying(post,
+													getApplicationContext());
+										} catch (ClientProtocolException e) {
+											// TODO Auto-generated catch block
+											e.printStackTrace();
+										} catch (IOException e) {
+											// TODO Auto-generated catch block
+											e.printStackTrace();
+										}
+									}
+								});								
 								return change_to_pause_btn;
 							}
 							nowPlaying = srv.getCurrentTrackName();
 							if (nowPlaying != null) {
+								runOnUiThread(new Runnable() {
+									public void run() {
+										HashMap<String, Object> post = new HashMap<String, Object>();
+										post.put("action", "resume");
+										Predatum predatum = new Predatum();
+										try {
+											predatum.updateNowPlaying(post,
+													getApplicationContext());
+										} catch (ClientProtocolException e) {
+											// TODO Auto-generated catch block
+											e.printStackTrace();
+										} catch (IOException e) {
+											// TODO Auto-generated catch block
+											e.printStackTrace();
+										}
+									}
+								});								
 								return change_to_pause_btn;
 							}
 							nowPlaying = srv.getCurrentTrackSource();
@@ -314,7 +349,7 @@ public class Predatoid extends Activity {
 							runOnUiThread(new Runnable() {
 								public void run() {
 									HashMap<String, Object> post = new HashMap<String, Object>();
-									post.put("action", "unpause");
+									post.put("action", "pause");
 									Predatum predatum = new Predatum();
 									try {
 										predatum.updateNowPlaying(post,
@@ -327,7 +362,7 @@ public class Predatoid extends Activity {
 										e.printStackTrace();
 									}
 								}
-							});
+							});							
 							return change_to_pause_btn;
 						}
 					} else if (srv.pause()) {
@@ -377,7 +412,7 @@ public class Predatoid extends Activity {
 					});
 				}
 			} catch (Exception e) {
-				log_err("exception in SendSrvCmd (" + func[0] + "): "
+				logErrorMessage("exception in SendSrvCmd (" + func[0] + "): "
 						+ e.toString());
 				if (srv == null || conn == null) {
 					conn = newConnection();
@@ -439,19 +474,39 @@ public class Predatoid extends Activity {
 			prefs.save();
 			if (conn != null) {
 				logMessage("unbinding service");
-				unbindService(conn);
+				boolean isBound = false;
+				isBound = getApplicationContext().bindService( new Intent(getApplicationContext(), PredatoidSrv.class), conn, Context.BIND_AUTO_CREATE );
+				if (isBound)
+				    getApplicationContext().unbindService(conn);
 				conn = null;
 			}
 		} catch (Exception e) {
-			log_err("exception while shutting down");
+			logErrorMessage("exception while shutting down " + e.toString());
 		}
 		Intent intie = new Intent();
 		intie.setClassName("com.predatum", "com.predatum.PredatoidSrv");
 		if (!stopService(intie)) {
-			log_err("service not stopped");
+			logErrorMessage("service not stopped");
 		} else {
 			logMessage("service stopped");
 		}
+		runOnUiThread(new Runnable() {
+			public void run() {
+				HashMap<String, Object> post = new HashMap<String, Object>();
+				post.put("action", "stop");
+				Predatum predatum = new Predatum();
+				try {
+					predatum.updateNowPlaying(post,
+							getApplicationContext());
+				} catch (ClientProtocolException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+			}
+		});		
 		finish();
 		android.os.Process.killProcess(android.os.Process.myPid());
 	}
@@ -504,7 +559,7 @@ public class Predatoid extends Activity {
 			ArrayList<String> songs, int trackNum, int startPos, ArrayList<HashMap<String, Object>> tracks) {
 		try {
 			if (!srv.initPlaylist(fpath, audioFiles.size())) {
-				log_err("failed to initialize new playlist on server");
+				logErrorMessage("failed to initialize new playlist on server");
 				Toast.makeText(getApplicationContext(), R.string.strSrvFail,
 						Toast.LENGTH_SHORT).show();
 				return false;
@@ -513,7 +568,7 @@ public class Predatoid extends Activity {
 				if (!srv.addToPlaylist(audioFiles.get(i),
 						(songs != null) ? songs.get(i) : null, 0, i,
 						(tracks != null) ? tracks.get(i) : null)) {
-					log_err("failed to add a file to server playlist");
+					logErrorMessage("failed to add a file to server playlist");
 					Toast.makeText(getApplicationContext(),
 							R.string.strSrvFail, Toast.LENGTH_SHORT).show();
 					return false;
@@ -523,7 +578,7 @@ public class Predatoid extends Activity {
 			if (!srv.play(trackNum, startPos)) {
 				Toast.makeText(getApplicationContext(), R.string.strSrvFail,
 						Toast.LENGTH_SHORT).show();
-				log_err("failed to start playing <contents>");
+				logErrorMessage("failed to start playing <contents>");
 				return false;
 			}
 			if (!pauseOnStart) {
@@ -532,7 +587,7 @@ public class Predatoid extends Activity {
 			}
 			return true;
 		} catch (Exception e) {
-			log_err("exception in playContents: " + e.toString());
+			logErrorMessage("exception in playContents: " + e.toString());
 			e.printStackTrace();
 			return false;
 		}
@@ -568,7 +623,7 @@ public class Predatoid extends Activity {
 			writer.close();
 			logMessage("Saving bookmark: " + book_file.toString() + ": " + g);
 		} catch (Exception e) {
-			log_err("exception in saveBook: " + e.toString());
+			logErrorMessage("exception in saveBook: " + e.toString());
 		}
 	}
 
@@ -615,16 +670,16 @@ public class Predatoid extends Activity {
 			}
 			k = k - 1;
 			if ((int) k >= files.size()) {
-				log_err("long-pressed item out of range!");
+				logErrorMessage("long-pressed item out of range!");
 				return false;
 			}
 			File f = new File(files.get((int) k));
 			if (!f.exists()) {
-				log_err("non-existing item long-pressed in the list!");
+				logErrorMessage("non-existing item long-pressed in the list!");
 				return false;
 			}
 
-			log_err("unknown item long-pressed!");
+			logErrorMessage("unknown item long-pressed!");
 			return false;
 		}
 	};
@@ -715,7 +770,7 @@ public class Predatoid extends Activity {
 													progress % 60);
 									nowTime.setText(sTime);
 								} catch (Exception e) {
-									log_err("exception 1 in progress update handler: "
+									logErrorMessage("exception 1 in progress update handler: "
 											+ e.toString());
 								}
 							}
@@ -769,7 +824,7 @@ public class Predatoid extends Activity {
 														track_time % 60);
 										allTime.setText(sTime);
 									} catch (Exception e) {
-										log_err("exception 2 in progress update handler: "
+										logErrorMessage("exception 2 in progress update handler: "
 												+ e.toString());
 									}
 								}
@@ -951,7 +1006,7 @@ public class Predatoid extends Activity {
 			try {
 				srv.setHeadsetMode(prefs.headsetMode);
 			} catch (RemoteException r) {
-				log_err("remote exception while trying to set headset_mode");
+				logErrorMessage("remote exception while trying to set headset_mode");
 			}
 		}
 	}
@@ -1008,7 +1063,7 @@ public class Predatoid extends Activity {
 		}
 
 		if (!getApplicationContext().bindService(intie, conn, 0)) {
-			log_err("cannot bind service");
+			logErrorMessage("cannot bind service");
 		} else {
 			logMessage("service bound");
 		}
@@ -1024,11 +1079,28 @@ public class Predatoid extends Activity {
 				srv.unregisterCallback(cBack);
 
 			} catch (RemoteException e) {
-				log_err("remote exception in onDestroy(): " + e.toString());
+				logErrorMessage("remote exception in onDestroy(): " + e.toString());
 			}
 		}
 		if (conn != null) {
 			logMessage("unbinding service");
+			runOnUiThread(new Runnable() {
+				public void run() {
+					HashMap<String, Object> post = new HashMap<String, Object>();
+					post.put("action", "stop");
+					Predatum predatum = new Predatum();
+					try {
+						predatum.updateNowPlaying(post,
+								getApplicationContext());
+					} catch (ClientProtocolException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					} catch (IOException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+				}
+			});				
 			getApplicationContext().unbindService(conn);
 			conn = null;
 		}
@@ -1158,7 +1230,7 @@ public class Predatoid extends Activity {
 
 			}
 		} catch (RemoteException e) {
-			log_err("remote exception in setContent");
+			logErrorMessage("remote exception in setContent");
 		}
 	}
 
@@ -1260,7 +1332,7 @@ public class Predatoid extends Activity {
 			return true;
 
 		} catch (Exception e) {
-			log_err("Exception in setAdapterFromMedia(): " + e.toString());
+			logErrorMessage("Exception in setAdapterFromMedia(): " + e.toString());
 			return false;
 		}
 

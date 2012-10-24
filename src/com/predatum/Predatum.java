@@ -1,6 +1,8 @@
 package com.predatum;
 
 import android.content.Context;
+import android.content.pm.PackageManager.NameNotFoundException;
+import android.os.Build;
 import android.util.Log;
 import android.widget.Toast;
 import org.json.*;
@@ -30,6 +32,7 @@ public class Predatum {
 	private static final String PREDATUM_URL = "http://192.168.2.40";
 	private static final String PREDATUM_LOGIN_CONTEXT = "/api/login/format/json";
 	private static final String PREDATUM_SONG_POST_CONTEXT = "/api/nowplaying/format/json";
+
 	private static Predatum instance = null;
 	private static int currentSongId = -1;
 
@@ -98,7 +101,7 @@ public class Predatum {
 			iterator.remove(); // avoids a ConcurrentModificationException
 		}
 
-		JSONObject serverResponse = predatumSyncPost(nameValuePairs,
+		JSONObject serverResponse = predatumPost(nameValuePairs,
 				PREDATUM_SONG_POST_CONTEXT, context);
 		try {
 
@@ -128,7 +131,7 @@ public class Predatum {
 		return predatumCookies.size() >= 1;
 	}
 
-	private JSONObject predatumSyncPost(List<NameValuePair> params,
+	private JSONObject predatumPost(List<NameValuePair> params,
 			String controller, Context context) {
 
 		PersistentCookieStore predatumPersistentCookieStore = new PersistentCookieStore(
@@ -137,6 +140,7 @@ public class Predatum {
 		JSONObject jResponse = null;
 		try {
 			HttpPost httppost = new HttpPost(PREDATUM_URL + controller);
+			httppost.setHeader("User-Agent", getPredatoidUserAgent(context));			
 			httppost.setEntity(new UrlEncodedFormEntity(params));
 			BasicHttpContext mHttpContext = new BasicHttpContext();
 			mHttpContext.setAttribute(ClientContext.COOKIE_STORE,
@@ -154,6 +158,20 @@ public class Predatum {
 		return jResponse;
 	}
 
+	private String getPredatoidUserAgent(Context context){
+		String userAgent = "";
+		try {
+			userAgent = "Predatoid-";
+			userAgent = userAgent + context.getPackageManager().getPackageInfo(context.getPackageName(), 0 ).versionName;
+			userAgent = userAgent + " (" + Build.DEVICE + "/" + Build.VERSION.RELEASE + ")";
+		} catch (NameNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	
+		return userAgent;
+	}
+	
 	private void login(String username, String password, final Context context) {
 
 		RequestParams params = new RequestParams();
@@ -168,7 +186,7 @@ public class Predatum {
 		}
 		client.setCookieStore(predatumPersistentCookieStore);
 		// TODO: set user agent
-		client.setUserAgent(context.getPackageName());
+		client.setUserAgent(getPredatoidUserAgent(context));
 		client.post(PREDATUM_URL + PREDATUM_LOGIN_CONTEXT, params,
 				new AsyncHttpResponseHandler() {
 

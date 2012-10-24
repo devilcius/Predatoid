@@ -35,9 +35,9 @@ public class SongExtraInfo {
 
 	}
 	
-	public String getBitrate() {
+	public Long getBitrate() {
 
-		return audioHeader.getBitRate();
+		return audioHeader.getBitRateAsNumber();
 
 	}	
 	
