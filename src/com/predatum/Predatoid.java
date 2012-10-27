@@ -53,6 +53,7 @@ import android.widget.AdapterView.OnItemClickListener;
 import android.widget.AdapterView.OnItemLongClickListener;
 import android.widget.SeekBar.OnSeekBarChangeListener;
 
+import com.loopj.android.http.PersistentCookieStore;
 import com.predatum.iconifiedlist.IconifiedText;
 import com.predatum.iconifiedlist.IconifiedTextListAdapter;
 
@@ -947,8 +948,8 @@ public class Predatoid extends Activity {
 		boolean loginToPredatum = settings.getBoolean("login_to_predatum",
 				false);
 		String loginUsername = settings.getString("login_username", null);
-		String loginPassword = settings.getString("login_password", null);
-
+		String loginPassword = settings.getString("login_password", null);	
+		
 		if (bookMode) {
 			prefs.savebooks = true;
 		} else {

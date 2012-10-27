@@ -47,7 +47,7 @@ public class Predatum {
 	public void authenticateToPredatum(final String userName,
 			final String userPassword, final Context context) {
 
-		PersistentCookieStore predatumPersistentCookieStore = new PersistentCookieStore(
+		final PersistentCookieStore predatumPersistentCookieStore = new PersistentCookieStore(
 				context);
 		if (!userIsLoggedIn(predatumPersistentCookieStore)) {
 			this.login(userName, userPassword, context);
@@ -65,16 +65,13 @@ public class Predatum {
 									Log.i(getClass().getSimpleName(),
 											message.getString("processed"));
 									Toast toast = Toast.makeText(context,
-											"You're logged in predatum",
+											message.getString("processed"),
 											Toast.LENGTH_LONG);
 									toast.show();
 								} else {
-									Log.e(getClass().getSimpleName(),
-											message.getString("error"));
-									Toast toast = Toast.makeText(context,
-											message.getString("error"),
-											Toast.LENGTH_LONG);
-									toast.show();
+									//cookie not valid
+									predatumPersistentCookieStore.clear();
+									login(userName, userPassword, context);
 								}
 
 							} catch (JSONException ex) {
@@ -173,7 +170,8 @@ public class Predatum {
 	}
 	
 	private void login(String username, String password, final Context context) {
-
+	
+		
 		RequestParams params = new RequestParams();
 		params.put("login", username);
 		params.put("password", password);
@@ -185,7 +183,6 @@ public class Predatum {
 			predatumPersistentCookieStore.clear();
 		}
 		client.setCookieStore(predatumPersistentCookieStore);
-		// TODO: set user agent
 		client.setUserAgent(getPredatoidUserAgent(context));
 		client.post(PREDATUM_URL + PREDATUM_LOGIN_CONTEXT, params,
 				new AsyncHttpResponseHandler() {
@@ -197,9 +194,9 @@ public class Predatum {
 							JSONObject message = new JSONObject(response);
 							if (message.has("processed")) {
 								Log.d(context.getClass().getSimpleName(),
-										"you're logged in predatum");
+										message.getString("processed"));
 								Toast toast = Toast.makeText(context,
-										"You're now logged in predatum",
+										message.getString("processed"),
 										Toast.LENGTH_LONG);
 								toast.show();
 							} else {
